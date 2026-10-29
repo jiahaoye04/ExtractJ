@@ -1,149 +1,84 @@
-# Extraer Ficheros
+# Barra de jornada
 
-Recorre una o varias carpetas y todas sus subcarpetas, y copia en un único
-sitio los ficheros de las extensiones que le digas, con un filtro opcional por
-nombre. Útil para juntar de golpe todos los `.java` de un proyecto, o todos los
-`.jsp` y `.css` que contengan la palabra `cocina` repartidos por tres carpetas
-distintas.
-
----
-
-## Instalación
-
-Necesitas Python 3 instalado en Windows. No hace falta nada más.
-
-Deja los dos ficheros en la misma carpeta:
-
-- `ExtraerFicheros.py`
-- `ExtraerFicheros.bat`
-
-Y haz doble clic en el `.bat`. Al arrancar por primera vez se crea un tercer
-fichero, `config.json`, donde se guardan tus preferencias.
-
-Si al abrirlo no pasa nada, edita el `.bat` con el Bloc de notas y corrige la
-ruta de `pythonw.exe` de la primera línea.
-
----
+Una barra fina de color en el borde inferior de la pantalla que se va llenando a lo largo de tu jornada laboral.
 
 ## Cómo se usa
 
-1. **Carpetas de origen**: escribe o elige una carpeta en la primera línea, y
-   en el campo de al lado sus extensiones, separadas por espacios:
-   `.java .jsp .css`. Con *+ Añadir línea* metes tantas carpetas como quieras,
-   cada una con sus propias extensiones. La `×` quita una línea y *Limpiar* las
-   vacía todas.
-2. **Extensión global** (arriba): lo que escribas ahí **se suma** a las
-   extensiones de todas las líneas. Si la línea 1 tiene `.jsp` y arriba pones
-   `.java`, esa línea extrae las dos. Vacía, no aporta nada.
-3. **Filtro por nombre** (opcional): ver el apartado de abajo.
-4. **Carpeta de destino**: por defecto es la carpeta del propio programa.
-5. Pulsa **Extraer ficheros**.
+1. Haz doble clic en `jornada.bat`.
+2. Se abre una ventanita. Rellena:
+   - **Hora de inicio**: a qué hora has empezado. Puedes escribir `9` o `9:30`.
+   - **Trabajo efectivo**: cuántas horas quieres trabajar hoy. `8` o `8:30`.
+   - **Colores** (opcional): un color para trabajo y otro para descanso.
+   - El resto de opciones (cómo avanza la barra, brillo, visibilidad) tienen valores por defecto que ya van bien; los explican las secciones de abajo.
+3. Pulsa **Aceptar**. La barra aparece abajo y empieza a llenarse.
 
-Debajo del destino verás la carpeta que se va a crear realmente. Si todas las
-líneas comparten una sola extensión, se llama `CopiaJAVA`, `CopiaJSP`, etc. Si
-hay varias, se llama `CopiaMIXTO`. El filtro no influye en el nombre.
+Y ya está. No hay nada más que hacer durante el día.
 
-Mientras copia verás la barra de progreso, el contador de ficheros y el nombre
-del que está copiando en ese momento.
+### Que no te lo pregunte todo cada mañana
 
-Al terminar, si tienes marcada la casilla **Abrir la carpeta al terminar**, se
-te abre el destino en el explorador en cuanto cierras el aviso de resumen. La
-casilla viene marcada de fábrica y se recuerda. Solo se abre si se ha copiado
-al menos un fichero.
+En la ventanita hay una casilla: **"Recordar estas horas y colores para los próximos días"**. Si la marcas, mañana ya vendrá todo rellenado con esos valores y solo tendrás que confirmar la hora de entrada.
 
----
+De fábrica son 8:30 horas. Puedes cambiarlo cuando quieras marcando otra vez la casilla.
 
-## Filtro por nombre
+## El icono de la bandeja
 
-Dos campos que se pueden combinar:
+Junto al reloj de Windows aparece un **círculo de color**. Es el mando a distancia del programa:
 
-- **Inclusión** con su modo: *Contiene*, *Empieza por* o *Termina por*.
-- **Excluir**: descarta todo lo que contenga esa palabra.
+- **Clic izquierdo** → cambia entre **trabajo** y **descanso**.
+- **Clic derecho** → menú:
+  - *Configurar*: cambia horas, colores y visibilidad.
+  - *Terminar*: cierra el programa y borra el progreso del día.
 
-Se comparan siempre contra el **nombre sin la extensión**, y sin distinguir
-mayúsculas. Por eso `holacocina.java` sí pasa el filtro *Termina por* `cocina`:
-la extensión no cuenta. Los dos campos vacíos, no filtra nada.
+> Si no ves el círculo, pulsa la flechita `^` de la barra de tareas: Windows esconde ahí los iconos nuevos. Puedes arrastrarlo fuera para tenerlo siempre a la vista.
 
-Ejemplo: *Termina por* `cocina` más excluir `test` sobre una carpeta de `.java`
-se queda con `holacocina.java` y descarta `test_cocina.java` y `cliente.java`.
+## Trabajo y descanso
 
----
+- **Azul (trabajo)**: el tiempo cuenta para tu jornada.
+- **Verde (descanso)**: el tiempo **no** cuenta. La barra sigue avanzando, pero tu hora de salida se retrasa.
 
-## Favoritos y recientes
+Ejemplo: pones 8 horas y te tomas 1 hora de comida. Saldrás 9 horas después de entrar. La barra se reajusta sola.
 
-Un favorito es un **grupo entero**: un nombre que le pones tú y la lista
-completa de carpetas con sus extensiones. Al pulsarlo se cargan todas de golpe.
+Los tramos se quedan pintados: verás en el color de cada momento cuándo trabajaste y cuándo descansaste.
 
-- El botón **☆ Guardar como favorito** guarda las líneas que tengas escritas en
-  ese momento. Se pone **★ En favoritos** cuando lo que hay en pantalla coincide
-  exactamente con uno guardado, y pulsándolo entonces lo quita.
-- La estrella de cada fila de *Recientes* hace lo mismo con esa extracción.
-- **La estrella solo brilla si coinciden las carpetas Y las extensiones.** Si el
-  favorito tiene `.java` y en la línea pones `.java .jsp`, se apaga hasta que lo
-  actualices. Cambiar la extensión global también la apaga, porque cambia las
-  extensiones efectivas.
+## Ver cuánto te queda
 
-**Guardar un grupo cuyas carpetas ya son favoritas lo sobrescribe**, no crea
-otro. Se queda con las extensiones que tengas ahora, sin acumular las viejas, y
-te ofrece el nombre anterior por si lo quieres conservar. Basta con que cambie
-una carpeta —una de más o una de menos— para que sea un favorito nuevo.
+Pon el ratón encima de la barra, abajo del todo. Aparece un aviso con el tiempo trabajado, el descanso acumulado y **a qué hora sales**. Al quitar el ratón desaparece.
 
-- **Buscar**: filtra los favoritos por nombre mientras escribes.
-- **Sustituir las líneas al cargar**: con el interruptor apagado (de fábrica),
-  pulsar un favorito **añade** sus carpetas a lo que ya tengas, lo que permite
-  combinar dos favoritos en una extracción. Si una carpeta ya está en pantalla
-  se le actualizan las extensiones en vez de duplicar la línea. Encendido,
-  borra lo que haya antes de cargar. La preferencia se recuerda.
-- **Recientes**: una fila por extracción, mostrando la primera carpeta y
-  `(+N)` si había más. Con el contador de al lado eliges cuántas ver, de 1 a 10.
+## Barra siempre visible u oculta
 
-No hay límite de favoritos ni de carpetas de origen. Cuando no caben, cada
-sección saca su propia barra de desplazamiento y la ventana crece hasta ocupar
-como mucho el 80% del alto de tu pantalla. El botón *Extraer ficheros* queda
-siempre a la vista.
+En la ventana de configuración eliges entre dos formas de trabajar:
 
----
+- **Siempre visible**: la barra está ahí todo el día. Es lo normal.
+- **Oculta**: no se ve nada. Si dejas el ratón medio segundo en el borde de abajo, la barra sube sola; se queda 5 segundos más después de que retires el ratón y vuelve a esconderse.
 
-## Historial
+Puedes cambiar de modo cuando quieras desde *Configurar*, en el icono de la bandeja.
 
-El botón *Historial*, arriba a la derecha, abre una ventana con todas las
-extracciones que has hecho: fecha, hora, extensiones, cuántos ficheros se
-copiaron, de dónde y a dónde. Si la extracción tenía varias carpetas, la
-columna *Origen* muestra la primera y `(+N)`. Se guardan las 200 últimas y hay
-un botón para vaciarlo.
+## Cómo avanza la barra
 
----
+En *Configurar* eliges cómo se llena:
 
-## Cosas que conviene saber
+- **Real**: avanza a ritmo constante. Una hora siempre ocupa lo mismo.
+- **Equilibrado**: avanza poco en las primeras horas y más en las últimas. Como el día "se siente" más largo al principio y más corto al final, así la barra acompaña mejor esa sensación. Con el deslizador ajustas cuánto se nota (Lineal, Suave, Media, Fuerte); por defecto viene el que mejor encaja con tus horas.
 
-- **La carpeta de destino se borra entera antes de cada extracción.** Si ya
-  existía, el programa te avisa y te pide confirmación. No guardes nada tuyo
-  dentro de una carpeta `Copia...`.
-- Los ficheros se copian **planos**, sin respetar la estructura de carpetas del
-  origen. Si dos ficheros acaban teniendo el mismo nombre —algo bastante más
-  probable ahora que se puede extraer de varias carpetas a la vez—, el segundo
-  se guarda como `Nombre_1.java`, el tercero como `Nombre_2.java`, y así.
-- Los ficheros originales **no se tocan**: es una copia, no un movimiento.
-- Las extensiones tienen que ser conocidas. Si escribes algo como `.asdhaisud`,
-  la extracción **no empieza**: te dice en qué línea está el fallo y qué texto
-  exactamente, y no se copia nada. Si son válidas pero no hay ningún fichero que
-  cumpla, te avisa de que no ha encontrado nada, y si tenías filtro te sugiere
-  que quizá sea demasiado estricto.
-- Si repites la misma carpeta en dos líneas, se fusionan en una sola pasada
-  sumando sus extensiones: no se recorre dos veces.
-- El destino no puede estar dentro de ninguna de las carpetas de origen.
+## Brillo en la punta
 
----
+Hay una casilla **"Brillo en la punta al avanzar"**. Con ella, el extremo de la barra se ilumina un instante cada vez que avanza y se apaga enseguida. Como la barra se mueve muy despacio, es una forma de ver "de un vistazo" que sigue corriendo. Puedes apagarlo si prefieres algo más sobrio.
 
-## Qué se recuerda entre sesiones
+## Cuando termines
 
-En `config.json` se guardan la extensión global, la carpeta de destino, si
-abrir el destino al terminar, el modo de carga de favoritos, el modo del filtro,
-cuántos recientes mostrar, los favoritos, los recientes y el historial. Si
-borras ese fichero, el programa vuelve a su estado de fábrica.
+Al completar tus horas, la pantalla se llena de emojis durante **10 segundos** y el programa se cierra solo. No molesta: puedes seguir usando el ordenador con normalidad mientras.
 
-El fichero está en **formato 2**. Si vienes de una versión anterior, tus
-favoritos y recientes se convierten solos al arrancar la primera vez: cada uno
-pasa a ser un grupo de una sola carpeta con su extensión, conservando el
-nombre. Si tenías la misma carpeta guardada dos veces con extensiones distintas,
-se fusionan en un único favorito con las dos.
+## Cosas a tener en cuenta
+
+- **Si cierras el programa por error**, vuelve a abrirlo: recupera el progreso del día automáticamente, sin preguntarte nada.
+- **La barra desaparece** si pones un programa a pantalla completa de verdad (vídeos, juegos con F11). Vuelve sola al salir de ese modo.
+- **No estorba**: no puedes hacer clic en la barra, los clics pasan a través de ella.
+- El progreso se borra al día siguiente. Cada mañana vuelve a pedirte la hora de inicio.
+
+## Si algo falla
+
+**La barra se ha quedado colgada, no responde o no encuentras el icono.**
+Haz doble clic en **`cerrar_jornada.bat`**. Te pide confirmación y luego cierra el programa a la fuerza y borra el progreso del día. Tu configuración (horas y colores) se conserva. Al abrir `jornada.bat` de nuevo, empiezas un día limpio.
+
+**Quieres ver el error concreto.**
+Abre `jornada.bat` con el Bloc de notas, cambia `pythonw.exe` por `python.exe` y guárdalo. Al ejecutarlo verás una ventana negra con el mensaje de error. Cuando termines, déjalo como estaba.
