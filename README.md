@@ -23,8 +23,8 @@ Deja los dos ficheros en la misma carpeta:
 Y haz doble clic en el `.bat`. Al arrancar por primera vez se crea un tercer
 fichero, `config.json`, donde se guardan tus preferencias.
 
-Si al abrirlo no pasa nada, edita el `.bat` con el Bloc de notas y corrige la
-ruta de `pythonw.exe` de la primera línea.
+Si al abrirlo no pasa nada, edita el `.bat` con el Bloc de notas y pon en la
+línea `set "PYTHONW=..."` la ruta completa a tu `pythonw.exe`.
 
 ---
 

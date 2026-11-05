@@ -544,3 +544,12 @@ fuente Segoe UI de verdad.
 - Las copias guardadas no se pueden restaurar al destino; solo verlas y abrir
   su carpeta. Se descartó a propósito, pero sería fácil de añadir con el
   marcador que ya existe.
+
+---
+
+## 2026-11-05 — Repositorio
+
+- Añadido `.gitignore` para que `config.json` (favoritos, recientes y rutas
+  locales) y `_contenido_extractj.json` no se suban al repositorio público.
+- `README.md`: corregida la indicación de dónde poner la ruta de `pythonw.exe`
+  en el `.bat`; no está en la primera línea.

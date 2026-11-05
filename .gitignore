@@ -1,0 +1,7 @@
+# Datos personales generados al usar el programa
+config.json
+_contenido_extractj.json
+
+# Python
+__pycache__/
+*.pyc
