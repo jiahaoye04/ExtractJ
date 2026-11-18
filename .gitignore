@@ -1,6 +1,10 @@
 # Datos personales generados al usar el programa
 config.json
 _contenido_extractj.json
+_origenes_extractj.json
+
+# Copias de las ultimas extracciones (por defecto, junto al programa)
+Extracciones guardadas/
 
 # Python
 __pycache__/

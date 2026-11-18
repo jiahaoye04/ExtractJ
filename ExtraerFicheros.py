@@ -10,9 +10,14 @@ origen lleva su propio juego de extensiones y sus propios filtros (tamano,
 texto en el nombre y muestra aleatoria), ademas del filtro global de nombre.
 Opcionalmente conserva una copia de los ficheros de las ultimas extracciones.
 
+Ademas puede ACTUALIZAR una carpeta de referencia: localiza el original de cada
+fichero (por su package si es Java, por nombre si no) y sustituye las copias
+que hayan cambiado.
+
 Solo usa la biblioteca estandar de Python (tkinter incluido).
 """
 
+import filecmp
 import json
 import math
 import os
@@ -32,6 +37,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 # ---------------------------------------------------------------------------
 
 TITULO = "Extraer Ficheros"
+VERSION = "2.1.0"
 FICHERO_CONFIG = "config.json"
 VERSION_CONFIG = 3
 
@@ -47,6 +53,39 @@ NOMBRE_ALMACEN = "Extracciones guardadas"
 # automatico no toca la carpeta, aunque el config apunte a ella.
 MARCADOR_GUARDADO = "_contenido_extractj.json"
 FIRMA_PROGRAMA = "ExtractJ"
+
+# Actualizar carpeta.
+# Registro que ExtractJ deja en la carpeta actualizada con el original de cada
+# fichero: la segunda vez ya no hace falta buscar nada.
+REGISTRO_ORIGENES = "_origenes_extractj.json"
+PREFIJO_CONSTANTE = "Constante"
+NOMBRE_CONSTANTE_DEFECTO = PREFIJO_CONSTANTE + "JAVA"
+# Ficheros de la carpeta que nunca se intentan actualizar.
+FICHEROS_IGNORADOS = {REGISTRO_ORIGENES.lower(), MARCADOR_GUARDADO.lower(),
+                      "desktop.ini", "thumbs.db", ".ds_store"}
+# Carpetas que no se recorren al buscar por nombre: control de versiones,
+# configuracion del IDE y salidas de compilacion. En build/classes de Eclipse
+# hay copias de .properties y .xml que darian falsos "varios candidatos".
+# A los Java no les afecta: se localizan por package, sin recorrer nada.
+DIRS_IGNORADOS = {".git", ".svn", ".hg", ".idea", ".settings", ".metadata",
+                  "node_modules", "bin", "build", "target", "out", "classes"}
+
+# Estados de cada fichero en la vista previa: (etiqueta, etiqueta de color).
+ESTADOS = {
+    "cambiado": ("Cambiado", "cambiado"),
+    "igual": ("Igual", "igual"),
+    "actualizado": ("Actualizado", "igual"),
+    "varios": ("Varios candidatos", "aviso"),
+    "no_encontrado": ("No encontrado", "error"),
+    "error": ("Error al leer", "error"),
+}
+VIAS = {
+    "registro": "Registro",
+    "package": "Package",
+    "nombre": "Nombre",
+    "elegido": "Elegido a mano",
+    "": "",
+}
 
 # La ventana se ajusta al contenido hasta este porcentaje del alto de pantalla.
 FRACCION_ALTO_MAX = 0.80
@@ -104,10 +143,17 @@ PALETAS = {
         "acento": "#2f7fd1",
         "acento_activo": "#2770bb",
         "acento_texto": "#ffffff",
+        # Boton de ejecucion (Extraer, Actualizar). En claro es el acento tal cual.
+        "principal": "#2f7fd1",
+        "principal_activo": "#2770bb",
+        "principal_pulsado": "#235f9e",
+        "principal_texto": "#ffffff",
         "seleccion": "#cfe3f7",
         "seleccion_texto": "#1e1e1e",
         "canal": "#e2e2e2",         # fondo de barras de progreso y scroll
         "desactivado": "#a3a3a3",
+        "aviso": "#9a6700",
+        "error": "#b3261e",
     },
     # Gris carbon, no negro puro: el negro absoluto cansa y hace que los
     # bordes de las tarjetas se pierdan. Las tarjetas van un punto mas
@@ -135,10 +181,19 @@ PALETAS = {
         "acento": "#3d8ee0",
         "acento_activo": "#4a9aea",
         "acento_texto": "#ffffff",
+        # Sobre fondo oscuro el mismo azul destaca mucho mas que en claro: el
+        # boton de ejecucion va en un azul apagado y se aclara al pasar por
+        # encima. Sigue distinguiendose de los botones grises, sin gritar.
+        "principal": "#2b4a6b",
+        "principal_activo": "#33587f",
+        "principal_pulsado": "#26425f",
+        "principal_texto": "#dce7f3",
         "seleccion": "#2d5a8a",
         "seleccion_texto": "#ffffff",
         "canal": "#2a2d31",
         "desactivado": "#6a7078",
+        "aviso": "#e3b341",
+        "error": "#ff8a80",
     },
 }
 
@@ -378,6 +433,199 @@ def borrar_carpeta_guardada(carpeta):
     return True
 
 
+# ---------------------------------------------------------------------------
+# Actualizar carpeta: localizar el original de cada fichero
+# ---------------------------------------------------------------------------
+
+_PATRON_PACKAGE = re.compile(
+    rb"^\s*package\s+([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*)\s*;", re.M)
+
+
+def leer_package(ruta):
+    """Devuelve el package de un .java ('com.ejemplo.app'), '' si no declara
+    ninguno (paquete por defecto) o None si no se puede leer.
+
+    Se trabaja en bytes y solo con los primeros 64 KB: el package siempre va
+    arriba, y asi da igual que el fichero este en UTF-8 o en Windows-1252.
+    Antes se quitan los comentarios: es muy habitual que la cabecera de
+    copyright vaya en un bloque /** ... */ justo encima de la linea del package.
+    """
+    try:
+        with open(ruta, "rb") as fichero:
+            datos = fichero.read(64 * 1024)
+    except OSError:
+        return None
+    datos = re.sub(rb"/\*.*?\*/", b" ", datos, flags=re.S)
+    datos = re.sub(rb"//[^\n]*", b"", datos)
+    encontrado = _PATRON_PACKAGE.search(datos)
+    if not encontrado:
+        return ""
+    return re.sub(rb"\s", b"", encontrado.group(1)).decode("ascii", "replace")
+
+
+def leer_registro_origenes(carpeta):
+    """{nombre del fichero: ruta original} guardado en la carpeta. {} si no hay."""
+    try:
+        with open(os.path.join(carpeta, REGISTRO_ORIGENES), "r", encoding="utf-8") as f:
+            datos = json.load(f)
+    except (OSError, ValueError, TypeError):
+        return {}
+    if not isinstance(datos, dict) or datos.get("programa") != FIRMA_PROGRAMA:
+        return {}
+    origenes = datos.get("origenes")
+    if not isinstance(origenes, dict):
+        return {}
+    return {str(k): str(v) for k, v in origenes.items() if k and v}
+
+
+def escribir_registro_origenes(carpeta, origenes):
+    with open(os.path.join(carpeta, REGISTRO_ORIGENES), "w", encoding="utf-8") as f:
+        json.dump({
+            "programa": FIRMA_PROGRAMA,
+            "version": 1,
+            "actualizado": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            "origenes": dict(sorted(origenes.items(), key=lambda par: par[0].lower())),
+        }, f, indent=2, ensure_ascii=False)
+
+
+def ficheros_de_carpeta(carpeta):
+    """Ficheros que cuelgan directamente de la carpeta, sin subcarpetas ni los
+    ficheros propios de ExtractJ. Lanza OSError si no se puede leer."""
+    nombres = []
+    for nombre in os.listdir(carpeta):
+        if nombre.lower() in FICHEROS_IGNORADOS:
+            continue
+        if os.path.isfile(os.path.join(carpeta, nombre)):
+            nombres.append(nombre)
+    return sorted(nombres, key=str.lower)
+
+
+def _sin_repetidos(rutas):
+    vistas = set()
+    limpias = []
+    for ruta in rutas:
+        clave = normalizar_ruta(ruta)
+        if clave not in vistas:
+            vistas.add(clave)
+            limpias.append(os.path.normpath(ruta))
+    return limpias
+
+
+def indexar_por_nombre(raices, nombres, excluir, avisar=None):
+    """Recorre las raices UNA vez y apunta donde esta cada nombre buscado.
+
+    Solo se guardan los nombres que interesan (en minusculas), asi el indice
+    ocupa poco aunque las raices tengan miles de ficheros. 'excluir' son
+    carpetas que no hay que mirar: la propia carpeta que se actualiza y el
+    almacen de copias, por si cuelgan de una raiz.
+    """
+    buscados = {n.lower() for n in nombres}
+    excluidas = {normalizar_ruta(e) for e in excluir if e}
+    indice = {}
+    for raiz in raices:
+        if avisar:
+            avisar("Buscando por nombre en " + acortar(raiz, 60) + "...")
+        for carpeta, subcarpetas, ficheros in os.walk(raiz):
+            subcarpetas[:] = [
+                d for d in subcarpetas
+                if d.lower() not in DIRS_IGNORADOS
+                and normalizar_ruta(os.path.join(carpeta, d)) not in excluidas]
+            for nombre in ficheros:
+                clave = nombre.lower()
+                if clave in buscados:
+                    indice.setdefault(clave, []).append(os.path.join(carpeta, nombre))
+    return indice
+
+
+def estado_frente_a(local, origen):
+    """'igual', 'cambiado' o 'error' comparando el CONTENIDO, no la fecha."""
+    try:
+        return "igual" if filecmp.cmp(local, origen, shallow=False) else "cambiado"
+    except OSError:
+        return "error"
+
+
+def analizar_carpeta(carpeta, raices, excluir=(), avisar=None):
+    """Localiza el original de cada fichero de la carpeta y lo compara.
+
+    Orden de busqueda por fichero:
+      1. El registro que dejo una actualizacion anterior, si el original
+         sigue existiendo.
+      2. Si es .java: raiz + package + nombre, probado en cada raiz.
+      3. Por nombre en todas las raices (indice construido una sola vez).
+    Devuelve una lista de dicts, uno por fichero.
+    """
+    registro = leer_registro_origenes(carpeta)
+    nombres = ficheros_de_carpeta(carpeta)
+    propia = normalizar_ruta(carpeta)
+
+    filas = []
+    pendientes = []
+    for nombre in nombres:
+        local = os.path.join(carpeta, nombre)
+        fila = {"nombre": nombre, "local": local, "candidatos": [], "origen": None,
+                "via": "", "estado": "no_encontrado", "marcado": False}
+
+        registrado = registro.get(nombre)
+        if registrado and os.path.isfile(registrado):
+            fila["candidatos"], fila["via"] = [os.path.normpath(registrado)], "registro"
+        elif nombre.lower().endswith(".java"):
+            paquete = leer_package(local)
+            if paquete is not None:
+                relativa = paquete.replace(".", os.sep)
+                encontrados = [os.path.join(r, relativa, nombre) for r in raices]
+                encontrados = [c for c in encontrados if os.path.isfile(c)]
+                if encontrados:
+                    fila["candidatos"], fila["via"] = _sin_repetidos(encontrados), "package"
+
+        if not fila["candidatos"]:
+            pendientes.append(fila)
+        filas.append(fila)
+
+    # Lo que no ha salido por registro ni por package, por nombre.
+    if pendientes:
+        indice = indexar_por_nombre(raices, [f["nombre"] for f in pendientes],
+                                    list(excluir) + [carpeta], avisar)
+        for fila in pendientes:
+            encontrados = [c for c in indice.get(fila["nombre"].lower(), [])
+                           if normalizar_ruta(os.path.dirname(c)) != propia]
+            if encontrados:
+                fila["candidatos"], fila["via"] = _sin_repetidos(encontrados), "nombre"
+
+    if avisar:
+        avisar("Comparando contenidos...")
+    for fila in filas:
+        resolver_fila(fila)
+    return filas
+
+
+def resolver_fila(fila, origen=None):
+    """Fija el estado de una fila segun sus candidatos (o el origen elegido)."""
+    if origen:
+        fila["origen"] = os.path.normpath(origen)
+    elif len(fila["candidatos"]) == 1:
+        fila["origen"] = fila["candidatos"][0]
+    else:
+        fila["origen"] = None
+
+    if fila["origen"]:
+        fila["estado"] = estado_frente_a(fila["local"], fila["origen"])
+    elif fila["candidatos"]:
+        fila["estado"] = "varios"
+    else:
+        fila["estado"] = "no_encontrado"
+    fila["marcado"] = fila["estado"] == "cambiado"
+    return fila
+
+
+def clave_reciente(grupo):
+    """Identidad de una fila de Recientes: el tipo y el conjunto de carpetas.
+
+    Una extraccion y una actualizacion de la misma carpeta son filas distintas.
+    """
+    return (grupo.get("tipo") or "extraccion", clave_rutas(grupo["rutas"]))
+
+
 def tema_de_windows():
     """'oscuro' o 'claro' segun Configuracion > Personalizacion > Colores.
 
@@ -598,7 +846,7 @@ def clave_completa(rutas):
 
 
 def resumen_rutas(rutas, maximo=52):
-    """'C:\\...\\chift  (+2)' para mostrar un grupo en una sola linea."""
+    """'C:\\...\\proyecto  (+2)' para mostrar un grupo en una sola linea."""
     if not rutas:
         return "(sin rutas)"
     texto = acortar(rutas[0].get("ruta", ""), maximo)
@@ -664,6 +912,9 @@ class Configuracion:
         self.sustituir_al_cargar = False     # False = anadir por encima
         self.filtro_modo = "contiene"
         self.tema = "sistema"
+        self.raices_busqueda = []            # vacio = Actualizar no funciona
+        self.constante_base = ""             # vacio = carpeta de destino
+        self.constante_nombre = NOMBRE_CONSTANTE_DEFECTO
         self.favoritos = []
         self.recientes = []
         self.historial = []
@@ -705,6 +956,15 @@ class Configuracion:
         carpeta = datos.get("carpeta_guardados") or ""
         self.carpeta_guardados = carpeta if isinstance(carpeta, str) else ""
 
+        raices = datos.get("raices_busqueda") or []
+        self.raices_busqueda = [str(r) for r in raices if isinstance(r, str) and r.strip()] \
+            if isinstance(raices, list) else []
+        base = datos.get("constante_base") or ""
+        self.constante_base = base if isinstance(base, str) else ""
+        nombre = datos.get("constante_nombre") or ""
+        self.constante_nombre = (nombre.strip() if isinstance(nombre, str) else "") \
+            or NOMBRE_CONSTANTE_DEFECTO
+
         ext_defecto = self.extension or ".java"
         self.favoritos = self._migrar_grupos(datos.get("favoritos", []),
                                              ext_defecto, con_nombre=True)
@@ -731,6 +991,9 @@ class Configuracion:
             "carpeta_guardados": self.carpeta_guardados,
             "filtro_modo": self.filtro_modo,
             "tema": self.tema,
+            "raices_busqueda": self.raices_busqueda,
+            "constante_base": self.constante_base,
+            "constante_nombre": self.constante_nombre,
             "favoritos": self.favoritos,
             "recientes": self.recientes,
             "historial": self.historial,
@@ -781,6 +1044,8 @@ class Configuracion:
                 if con_nombre:
                     grupo["nombre"] = elemento.get("nombre") or resumen_rutas(rutas)
                 else:
+                    if elemento.get("tipo") == "actualizacion":
+                        grupo["tipo"] = "actualizacion"
                     guardado = elemento.get("guardado")
                     if isinstance(guardado, dict) and guardado.get("carpeta"):
                         grupo["guardado"] = {
@@ -836,8 +1101,8 @@ class Configuracion:
         vistos = set()
         limpios = []
         for grupo in self.recientes:
-            clave = clave_rutas(grupo["rutas"])
-            if clave and clave not in vistos:
+            clave = clave_reciente(grupo)
+            if clave[1] and clave not in vistos:
                 vistos.add(clave)
                 limpios.append(grupo)
         self.recientes = limpios
@@ -888,7 +1153,7 @@ class Configuracion:
 
     # -- recientes ----------------------------------------------------------
 
-    def anadir_reciente(self, rutas):
+    def anadir_reciente(self, rutas, tipo="extraccion"):
         """Una fila por CONJUNTO DE CARPETAS, aunque cambien las extensiones o
         los filtros. Repetir una extraccion sube su fila arriba con lo ultimo
         que se uso; no crea otra.
@@ -897,16 +1162,18 @@ class Configuracion:
         que esta extraccion guarde los suyos. Asi, si falla o no copia nada, no
         se pierde la copia anterior de esas mismas carpetas.
         """
-        clave = clave_rutas(rutas)
+        nuevo = {"rutas": [copiar_entrada(r) for r in rutas]}
+        if tipo != "extraccion":
+            nuevo["tipo"] = tipo
+        clave = clave_reciente(nuevo)
         antes = self._carpetas_guardadas()
         heredado = None
         restantes = []
         for grupo in self.recientes:
-            if clave_rutas(grupo["rutas"]) == clave:
+            if clave_reciente(grupo) == clave:
                 heredado = heredado or grupo.get("guardado")
             else:
                 restantes.append(grupo)
-        nuevo = {"rutas": [copiar_entrada(r) for r in rutas]}
         if heredado:
             nuevo["guardado"] = heredado
         self.recientes = [nuevo] + restantes
@@ -948,14 +1215,14 @@ class Configuracion:
         self.max_guardados = max(0, min(int(valor), self.max_recientes))
         self._podar_guardados(antes)
 
-    def asignar_guardado(self, rutas, info):
+    def asignar_guardado(self, rutas, info, tipo="extraccion"):
         """Engancha una copia recien hecha a su reciente. Si ese reciente ya no
         tiene derecho a copia (por ejemplo, el contador esta en 0), la copia
         se borra en el acto."""
         antes = self._carpetas_guardadas() | {info["carpeta"]}
-        clave = clave_rutas(rutas)
+        clave = (tipo, clave_rutas(rutas))
         for indice, grupo in enumerate(self.recientes):
-            if clave_rutas(grupo["rutas"]) == clave and indice < self.max_guardados:
+            if clave_reciente(grupo) == clave and indice < self.max_guardados:
                 grupo["guardado"] = info
                 break
         self._podar_guardados(antes)
@@ -963,6 +1230,25 @@ class Configuracion:
     def olvidar_guardado(self, grupo):
         """Para cuando la carpeta ya no existe: solo quita la referencia."""
         grupo.pop("guardado", None)
+
+    # -- actualizar carpeta ----------------------------------------------------
+
+    def carpeta_constante(self):
+        base = self.constante_base or self.destino or directorio_programa()
+        return os.path.join(base, self.constante_nombre or NOMBRE_CONSTANTE_DEFECTO)
+
+    def anadir_historial_actualizacion(self, carpeta, total):
+        ahora = datetime.now()
+        self.historial.insert(0, {
+            "fecha": ahora.strftime("%d/%m/%Y"),
+            "hora": ahora.strftime("%H:%M:%S"),
+            "extension": "actualizacion",
+            "total": total,
+            "origen": carpeta,
+            "origenes": [carpeta],
+            "destino": carpeta,
+        })
+        del self.historial[MAX_HISTORIAL:]
 
     # -- historial ----------------------------------------------------------
 
@@ -1361,11 +1647,18 @@ class VentanaContenido(tk.Toplevel):
 
         ficheros = datos.get("ficheros") or []
         rutas = datos.get("rutas") or []
+        es_actualizacion = datos.get("tipo") == "actualizacion"
 
-        ttk.Label(marco, text="Extraccion del %s" % datos.get("fecha", "?"),
-                  style="Seccion.TLabel").pack(anchor="w")
-        resumen = "%d ficheros   \u00b7   %s   \u00b7   %d carpeta(s) de origen" % (
-            len(ficheros), resumen_extensiones(rutas) or TEXTO_TODOS, len(rutas))
+        if es_actualizacion:
+            titulo = "Versiones anteriores \u00b7 actualizacion del %s" % datos.get("fecha", "?")
+            resumen = "%d ficheros sustituidos en %s" % (
+                len(ficheros), acortar(datos.get("carpeta_actualizada", ""), 80))
+            self.title(TITULO + " - Versiones anteriores")
+        else:
+            titulo = "Extraccion del %s" % datos.get("fecha", "?")
+            resumen = "%d ficheros   \u00b7   %s   \u00b7   %d carpeta(s) de origen" % (
+                len(ficheros), resumen_extensiones(rutas) or TEXTO_TODOS, len(rutas))
+        ttk.Label(marco, text=titulo, style="Seccion.TLabel").pack(anchor="w")
         ttk.Label(marco, text=resumen, style="Suave.TLabel").pack(anchor="w", pady=(2, 0))
         ttk.Label(marco, text="Guardado en: " + acortar(carpeta, 100),
                   style="Suave.TLabel").pack(anchor="w", pady=(2, 10))
@@ -1380,7 +1673,8 @@ class VentanaContenido(tk.Toplevel):
         tabla = ttk.Treeview(marco, columns=columnas, show="headings")
         for clave, texto, ancho, alineacion in (
                 ("nombre", "Fichero", 230, "w"),
-                ("origen", "Carpeta de origen", 520, "w"),
+                ("origen", "Original" if es_actualizacion else "Carpeta de origen",
+                 520, "w"),
                 ("tamano", "Tamano", 90, "e")):
             tabla.heading(clave, text=texto)
             tabla.column(clave, width=ancho, anchor=alineacion)
@@ -1400,6 +1694,590 @@ class VentanaContenido(tk.Toplevel):
         if not abrir_carpeta(self.carpeta):
             messagebox.showerror(TITULO, "No se ha podido abrir la carpeta:\n%s"
                                  % self.carpeta, parent=self)
+
+
+class VentanaElegirOrigen(tk.Toplevel):
+    """Dialogo para escoger entre varios originales posibles de un fichero."""
+
+    def __init__(self, padre, nombre, candidatos):
+        super().__init__(padre)
+        self.resultado = None
+        self.candidatos = list(candidatos)
+
+        self.title("Elegir original")
+        self.geometry("760x320")
+        self.minsize(520, 240)
+        self.transient(padre)
+        self.configure(bg=P["fondo"])
+
+        marco = ttk.Frame(self, padding=14)
+        marco.pack(fill="both", expand=True)
+        ttk.Label(marco, text="Hay varios ficheros llamados %s" % nombre,
+                  style="Seccion.TLabel").pack(anchor="w")
+        ttk.Label(marco, text="Elige cual es el original. La eleccion se recuerda "
+                              "en la carpeta al actualizar.",
+                  style="Suave.TLabel").pack(anchor="w", pady=(2, 10))
+
+        pie = ttk.Frame(marco)
+        pie.pack(side="bottom", fill="x", pady=(10, 0))
+        ttk.Button(pie, text="Aceptar", command=self._aceptar).pack(side="right")
+        ttk.Button(pie, text="Cancelar", command=self.destroy).pack(side="right",
+                                                                     padx=(0, 6))
+
+        self.tabla = ttk.Treeview(marco, columns=("ruta",), show="headings",
+                                  selectmode="browse")
+        self.tabla.heading("ruta", text="Ruta")
+        self.tabla.column("ruta", anchor="w")
+        for indice, ruta in enumerate(self.candidatos):
+            self.tabla.insert("", "end", iid=str(indice), values=(ruta,))
+        if self.candidatos:
+            self.tabla.selection_set("0")
+        self.tabla.pack(fill="both", expand=True)
+        self.tabla.bind("<Double-1>", lambda _e: self._aceptar())
+
+        self.bind("<Return>", lambda _e: self._aceptar())
+        self.bind("<Escape>", lambda _e: self.destroy())
+        try:
+            self.grab_set()
+        except tk.TclError:
+            pass
+
+    def _aceptar(self):
+        seleccion = self.tabla.selection()
+        if seleccion:
+            self.resultado = self.candidatos[int(seleccion[0])]
+        self.destroy()
+
+
+class VentanaActualizar(tk.Toplevel):
+    """Actualiza una carpeta de referencia con los originales de sus ficheros.
+
+    Flujo: Analizar (en un hilo) -> vista previa -> Actualizar marcados.
+    Nada se toca hasta pulsar el ultimo boton.
+    """
+
+    COLUMNAS = ("marca", "fichero", "estado", "via", "origen")
+
+    def __init__(self, app, carpeta=None, analizar=False):
+        super().__init__(app)
+        self.app = app
+        self.config_app = app.config_app
+        self.filas = []
+        self.cola = queue.Queue()
+        self.hilo = None
+
+        self.title(TITULO + " - Actualizar carpeta")
+        self.geometry("1040x640")
+        self.minsize(820, 480)
+        self.configure(bg=P["fondo"])
+
+        cfg = self.config_app
+        self.var_base = tk.StringVar(value=cfg.constante_base or cfg.destino)
+        self.var_nombre = tk.StringVar(value=cfg.constante_nombre)
+        self.var_estado = tk.StringVar(value="")
+        self.var_resumen = tk.StringVar(value="")
+        if carpeta:
+            self._poner_carpeta(carpeta)
+
+        self._construir()
+        self.repintar_tema()
+        self._refrescar_raices()
+        self._refrescar_carpeta()
+        self.var_base.trace_add("write", lambda *_: self._refrescar_carpeta())
+        self.var_nombre.trace_add("write", lambda *_: self._refrescar_carpeta())
+        self.protocol("WM_DELETE_WINDOW", self._cerrar)
+
+        if analizar:
+            self.after(150, self._analizar)
+
+    # -- construccion ---------------------------------------------------------
+
+    def _construir(self):
+        marco = ttk.Frame(self, padding=(16, 14, 16, 14))
+        marco.pack(fill="both", expand=True)
+        marco.columnconfigure(0, weight=1)
+        marco.rowconfigure(4, weight=1)
+
+        # --- Carpeta a actualizar ---------------------------------------------
+        ttk.Label(marco, text="Carpeta a actualizar",
+                  style="Seccion.TLabel").grid(row=0, column=0, sticky="w")
+        fila = ttk.Frame(marco)
+        fila.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        fila.columnconfigure(1, weight=1)
+        ttk.Label(fila, text="Ruta").grid(row=0, column=0, padx=(0, 8))
+        ttk.Entry(fila, textvariable=self.var_base).grid(row=0, column=1, sticky="ew")
+        ttk.Label(fila, text="Nombre").grid(row=0, column=2, padx=(12, 8))
+        ttk.Entry(fila, textvariable=self.var_nombre, width=24).grid(row=0, column=3)
+        ttk.Button(fila, text="Examinar...", command=self._elegir_carpeta).grid(
+            row=0, column=4, padx=(6, 0))
+        self.etiqueta_carpeta = ttk.Label(marco, text="", style="Suave.TLabel")
+        self.etiqueta_carpeta.grid(row=2, column=0, sticky="w", pady=(4, 0))
+
+        # --- Rutas de busqueda --------------------------------------------------
+        bloque = ttk.Frame(marco)
+        bloque.grid(row=3, column=0, sticky="ew", pady=(14, 0))
+        bloque.columnconfigure(0, weight=1)
+        titulo = ttk.Frame(bloque)
+        titulo.grid(row=0, column=0, sticky="ew")
+        ttk.Label(titulo, text="Rutas de busqueda",
+                  style="Seccion.TLabel").pack(side="left")
+        ttk.Button(titulo, text="Quitar", style="Barra.TButton",
+                   command=self._quitar_raiz).pack(side="right")
+        ttk.Button(titulo, text="+ Anadir ruta", style="Barra.TButton",
+                   command=self._anadir_raiz).pack(side="right", padx=(0, 6))
+
+        self.tabla_raices = ttk.Treeview(bloque, columns=("ruta",), show="tree",
+                                         height=3, selectmode="browse")
+        self.tabla_raices.column("#0", width=0, stretch=False)
+        self.tabla_raices.column("ruta", anchor="w")
+        self.tabla_raices.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        ttk.Label(bloque,
+                  text="Los .java se buscan por su package dentro de cada ruta "
+                       "(por ejemplo C:\\proyectos\\mi-app\\src); "
+                       "el resto, por nombre.",
+                  style="Suave.TLabel").grid(row=2, column=0, sticky="w", pady=(4, 0))
+
+        # --- Vista previa -----------------------------------------------------
+        previa = ttk.Frame(marco)
+        previa.grid(row=4, column=0, sticky="nsew", pady=(14, 0))
+        previa.columnconfigure(0, weight=1)
+        previa.rowconfigure(1, weight=1)
+
+        cabecera = ttk.Frame(previa)
+        cabecera.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 6))
+        ttk.Label(cabecera, text="Vista previa",
+                  style="Seccion.TLabel").pack(side="left")
+        ttk.Label(cabecera, textvariable=self.var_resumen,
+                  style="Suave.TLabel").pack(side="left", padx=(10, 0))
+        self.boton_analizar = ttk.Button(cabecera, text="Analizar",
+                                         style="Barra.TButton", command=self._analizar)
+        self.boton_analizar.pack(side="right")
+
+        self.tabla = ttk.Treeview(previa, columns=self.COLUMNAS, show="headings",
+                                  selectmode="browse")
+        for clave, texto, ancho, alineacion, estira in (
+                ("marca", "", 34, "center", False),
+                ("fichero", "Fichero", 230, "w", False),
+                ("estado", "Estado", 130, "w", False),
+                ("via", "Encontrado por", 128, "w", False),
+                ("origen", "Original", 460, "w", True)):
+            self.tabla.heading(clave, text=texto)
+            self.tabla.column(clave, width=ancho, anchor=alineacion, stretch=estira)
+        barra = ttk.Scrollbar(previa, orient="vertical", command=self.tabla.yview)
+        self.tabla.configure(yscrollcommand=barra.set)
+        self.tabla.grid(row=1, column=0, sticky="nsew")
+        barra.grid(row=1, column=1, sticky="ns")
+        self.tabla.bind("<Button-1>", self._clic_tabla, add="+")
+        self.tabla.bind("<space>", lambda _e: self._alternar_seleccionada())
+        self.tabla.bind("<Double-1>", lambda _e: self._elegir_origen())
+
+        # --- Pie --------------------------------------------------------------
+        pie = ttk.Frame(marco)
+        pie.grid(row=5, column=0, sticky="ew", pady=(12, 0))
+        pie.columnconfigure(3, weight=1)
+        ttk.Button(pie, text="Marcar todos", style="Barra.TButton",
+                   command=lambda: self._marcar_todos(True)).grid(row=0, column=0)
+        ttk.Button(pie, text="Ninguno", style="Barra.TButton",
+                   command=lambda: self._marcar_todos(False)).grid(row=0, column=1,
+                                                                   padx=(6, 0))
+        ttk.Button(pie, text="Elegir original...", style="Barra.TButton",
+                   command=self._elegir_origen).grid(row=0, column=2, padx=(6, 0))
+        self.barra_progreso = ttk.Progressbar(pie, mode="indeterminate", length=120)
+        ttk.Label(pie, textvariable=self.var_estado, style="Estado.TLabel").grid(
+            row=0, column=3, sticky="w", padx=(14, 6))
+        self.boton_actualizar = ttk.Button(pie, text="Actualizar marcados",
+                                           style="Principal.TButton",
+                                           command=self._actualizar)
+        self.boton_actualizar.grid(row=0, column=5)
+        self.boton_actualizar.state(["disabled"])
+
+    def repintar_tema(self):
+        """Los colores de cada estado van en etiquetas del Treeview, que no
+        siguen a los estilos: se rehacen al cambiar de tema."""
+        self.configure(bg=P["fondo"])
+        self.tabla.tag_configure("cambiado", foreground=P["filtro"])
+        self.tabla.tag_configure("igual", foreground=P["suave"])
+        self.tabla.tag_configure("aviso", foreground=P["aviso"])
+        self.tabla.tag_configure("error", foreground=P["error"])
+
+    # -- carpeta y raices -------------------------------------------------------
+
+    def _poner_carpeta(self, ruta):
+        ruta = os.path.normpath(ruta)
+        self.var_base.set(os.path.dirname(ruta))
+        self.var_nombre.set(os.path.basename(ruta))
+
+    def carpeta(self):
+        base = self.var_base.get().strip().strip('"')
+        nombre = self.var_nombre.get().strip().strip('"')
+        if not base or not nombre:
+            return ""
+        return os.path.normpath(os.path.join(base, nombre))
+
+    def _refrescar_carpeta(self):
+        ruta = self.carpeta()
+        if not ruta:
+            texto = "Indica la ruta y el nombre de la carpeta."
+        elif os.path.isdir(ruta):
+            texto = "Se actualizara: " + acortar(ruta, 110)
+        else:
+            texto = "No existe todavia: " + acortar(ruta, 100)
+        self.etiqueta_carpeta.config(text=texto)
+
+    def _elegir_carpeta(self):
+        inicial = self.carpeta() if os.path.isdir(self.carpeta()) else (
+            self.var_base.get() if os.path.isdir(self.var_base.get()) else directorio_programa())
+        ruta = filedialog.askdirectory(parent=self, title="Carpeta a actualizar",
+                                       initialdir=inicial)
+        if ruta:
+            self._poner_carpeta(ruta)
+            self._guardar_config()
+
+    def _refrescar_raices(self):
+        self.tabla_raices.delete(*self.tabla_raices.get_children())
+        if not self.config_app.raices_busqueda:
+            self.tabla_raices.insert("", "end", iid="vacia", values=(
+                "(ninguna: anade al menos una para poder actualizar)",))
+            return
+        for indice, raiz in enumerate(self.config_app.raices_busqueda):
+            marca = "" if os.path.isdir(raiz) else "   (no existe)"
+            self.tabla_raices.insert("", "end", iid=str(indice), values=(raiz + marca,))
+
+    def _anadir_raiz(self):
+        ruta = filedialog.askdirectory(parent=self, title="Ruta de busqueda",
+                                       initialdir=directorio_programa())
+        if not ruta:
+            return
+        ruta = os.path.normpath(ruta)
+        if normalizar_ruta(ruta) not in {normalizar_ruta(r)
+                                         for r in self.config_app.raices_busqueda}:
+            self.config_app.raices_busqueda.append(ruta)
+            self.config_app.guardar()
+        self._refrescar_raices()
+
+    def _quitar_raiz(self):
+        seleccion = [i for i in self.tabla_raices.selection() if i != "vacia"]
+        if not seleccion:
+            return
+        del self.config_app.raices_busqueda[int(seleccion[0])]
+        self.config_app.guardar()
+        self._refrescar_raices()
+
+    def _guardar_config(self):
+        cfg = self.config_app
+        base = self.var_base.get().strip().strip('"')
+        # Si la ruta es la de destino, se guarda vacia: asi sigue al destino.
+        cfg.constante_base = "" if base and cfg.destino and \
+            normalizar_ruta(base) == normalizar_ruta(cfg.destino) else base
+        cfg.constante_nombre = self.var_nombre.get().strip() or NOMBRE_CONSTANTE_DEFECTO
+        cfg.guardar()
+
+    # -- analisis ---------------------------------------------------------------
+
+    def _validar(self):
+        """Devuelve (carpeta, raices) o None tras avisar del problema."""
+        raices = self.config_app.raices_busqueda
+        if not raices:
+            messagebox.showerror(
+                TITULO,
+                "No hay ninguna ruta de busqueda configurada.\n\n"
+                "Anade al menos una con '+ Anadir ruta', por ejemplo la carpeta "
+                "src del proyecto: los .java se localizan a partir de ella con "
+                "su package.", parent=self)
+            return None
+        faltan = [r for r in raices if not os.path.isdir(r)]
+        if faltan:
+            messagebox.showerror(TITULO, "Estas rutas de busqueda no existen:\n\n%s"
+                                 % "\n".join(faltan), parent=self)
+            return None
+        carpeta = self.carpeta()
+        if not carpeta or not os.path.isdir(carpeta):
+            messagebox.showerror(TITULO, "La carpeta a actualizar no existe:\n\n%s"
+                                 % (carpeta or "(sin indicar)"), parent=self)
+            return None
+        return carpeta, list(raices)
+
+    def _analizar(self):
+        if self.hilo and self.hilo.is_alive():
+            return
+        validado = self._validar()
+        if not validado:
+            return
+        carpeta, raices = validado
+        self._guardar_config()
+
+        self.filas = []
+        self._pintar_tabla()
+        self.var_resumen.set("")
+        self.boton_analizar.state(["disabled"])
+        self.boton_actualizar.state(["disabled"])
+        self.barra_progreso.grid(row=0, column=4, padx=(0, 10))
+        self.barra_progreso.start(12)
+        self.var_estado.set("Analizando...")
+
+        excluir = [self.config_app.almacen()]
+        avisar = lambda texto: self.cola.put(("estado", texto))
+
+        def trabajo():
+            try:
+                filas = analizar_carpeta(carpeta, raices, excluir, avisar)
+                self.cola.put(("fin", filas))
+            except OSError as error:
+                self.cola.put(("error", str(error)))
+
+        self.hilo = threading.Thread(target=trabajo, daemon=True)
+        self.hilo.start()
+        self.after(80, self._leer_cola)
+
+    def _leer_cola(self):
+        try:
+            while True:
+                tipo, dato = self.cola.get_nowait()
+                if tipo == "estado":
+                    self.var_estado.set(dato)
+                elif tipo in ("fin", "error"):
+                    self._fin_analisis(dato if tipo == "fin" else None,
+                                       dato if tipo == "error" else None)
+                    return
+        except queue.Empty:
+            pass
+        try:
+            if self.winfo_exists():
+                self.after(80, self._leer_cola)
+        except tk.TclError:
+            pass
+
+    def _fin_analisis(self, filas, error):
+        self.barra_progreso.stop()
+        self.barra_progreso.grid_remove()
+        self.boton_analizar.state(["!disabled"])
+        if error:
+            self.var_estado.set("Error.")
+            messagebox.showerror(TITULO, "No se ha podido analizar la carpeta:\n%s"
+                                 % error, parent=self)
+            return
+        self.filas = filas
+        self.var_estado.set("")
+        self._pintar_tabla()
+        if not filas:
+            messagebox.showinfo(TITULO, "La carpeta no tiene ficheros que actualizar.",
+                                parent=self)
+
+    # -- tabla ------------------------------------------------------------------
+
+    def _pintar_tabla(self):
+        seleccion = self.tabla.selection()
+        self.tabla.delete(*self.tabla.get_children())
+        for indice, fila in enumerate(self.filas):
+            etiqueta, tag = ESTADOS[fila["estado"]]
+            if fila["estado"] == "cambiado":
+                marca = "\u2611" if fila["marcado"] else "\u2610"
+            else:
+                marca = ""
+            if fila["origen"]:
+                origen = fila["origen"]
+            elif fila["estado"] == "varios":
+                origen = "%d posibles: doble clic para elegir" % len(fila["candidatos"])
+            elif fila["estado"] == "no_encontrado":
+                origen = "Doble clic para indicarlo a mano"
+            else:
+                origen = ""
+            self.tabla.insert("", "end", iid=str(indice), tags=(tag,), values=(
+                marca, fila["nombre"], etiqueta, VIAS.get(fila["via"], ""), origen))
+        if seleccion and self.tabla.exists(seleccion[0]):
+            self.tabla.selection_set(seleccion[0])
+        self._pintar_resumen()
+
+    def _pintar_resumen(self):
+        if not self.filas:
+            self.var_resumen.set("")
+            self.boton_actualizar.state(["disabled"])
+            return
+        cuenta = {}
+        for fila in self.filas:
+            cuenta[fila["estado"]] = cuenta.get(fila["estado"], 0) + 1
+        piezas = ["%d ficheros" % len(self.filas)]
+        for clave in ("cambiado", "igual", "actualizado", "varios", "no_encontrado", "error"):
+            if cuenta.get(clave):
+                piezas.append("%d %s" % (cuenta[clave], ESTADOS[clave][0].lower()))
+        marcados = sum(1 for f in self.filas if f["marcado"])
+        self.var_resumen.set("   \u00b7   ".join(piezas))
+        self.boton_actualizar.config(text="Actualizar marcados (%d)" % marcados
+                                     if marcados else "Actualizar marcados")
+        # Sin marcados tambien se puede pulsar: guarda el registro de origenes,
+        # y es como se apuntan las elecciones hechas a mano.
+        if any(f["origen"] for f in self.filas):
+            self.boton_actualizar.state(["!disabled"])
+        else:
+            self.boton_actualizar.state(["disabled"])
+
+    def _fila_seleccionada(self):
+        seleccion = self.tabla.selection()
+        return int(seleccion[0]) if seleccion else None
+
+    def _clic_tabla(self, evento):
+        if self.tabla.identify_column(evento.x) != "#1":
+            return
+        iid = self.tabla.identify_row(evento.y)
+        if iid:
+            self._alternar(int(iid))
+
+    def _alternar_seleccionada(self):
+        indice = self._fila_seleccionada()
+        if indice is not None:
+            self._alternar(indice)
+
+    def _alternar(self, indice):
+        fila = self.filas[indice]
+        if fila["estado"] == "cambiado":
+            fila["marcado"] = not fila["marcado"]
+            self._pintar_tabla()
+
+    def _marcar_todos(self, valor):
+        for fila in self.filas:
+            if fila["estado"] == "cambiado":
+                fila["marcado"] = valor
+        self._pintar_tabla()
+
+    def _elegir_origen(self):
+        indice = self._fila_seleccionada()
+        if indice is None:
+            return
+        fila = self.filas[indice]
+        if len(fila["candidatos"]) > 1:
+            dialogo = VentanaElegirOrigen(self, fila["nombre"], fila["candidatos"])
+            self.wait_window(dialogo)
+            elegido = dialogo.resultado
+        else:
+            raices = [r for r in self.config_app.raices_busqueda if os.path.isdir(r)]
+            elegido = filedialog.askopenfilename(
+                parent=self, title="Original de " + fila["nombre"],
+                initialdir=os.path.dirname(fila["origen"]) if fila["origen"]
+                else (raices[0] if raices else directorio_programa()))
+        if not elegido:
+            return
+        if normalizar_ruta(elegido) == normalizar_ruta(fila["local"]):
+            messagebox.showerror(TITULO, "Ese es el propio fichero de la carpeta, "
+                                 "no su original.", parent=self)
+            return
+        resolver_fila(fila, elegido)
+        if fila["via"] != "package" or fila["origen"] not in fila["candidatos"]:
+            fila["via"] = "elegido"
+        self._pintar_tabla()
+
+    # -- aplicar --------------------------------------------------------------
+
+    def _actualizar(self):
+        carpeta = self.carpeta()
+        if not carpeta or not os.path.isdir(carpeta):
+            messagebox.showerror(TITULO, "La carpeta a actualizar ya no existe.",
+                                 parent=self)
+            return
+        marcadas = [f for f in self.filas if f["marcado"] and f["estado"] == "cambiado"]
+        cfg = self.config_app
+
+        # 1. Versiones viejas al almacen, si se guardan copias.
+        guardado, error_copia = None, None
+        if marcadas and cfg.max_guardados > 0:
+            guardado, error_copia = self._guardar_versiones(carpeta, marcadas)
+            if error_copia and not messagebox.askyesno(
+                    TITULO,
+                    "No se han podido guardar las versiones anteriores:\n%s\n\n"
+                    "Actualizar igualmente, sin copia?" % error_copia, parent=self):
+                return
+
+        # 2. Sustituir.
+        actualizados, fallidos = 0, []
+        for fila in marcadas:
+            try:
+                shutil.copy2(fila["origen"], fila["local"])
+                fila["estado"], fila["marcado"] = "actualizado", False
+                actualizados += 1
+            except OSError as error:
+                fallidos.append("%s: %s" % (fila["nombre"], error))
+
+        # 3. Registro de origenes: lo que haya en el registro mas lo resuelto
+        #    ahora. Se conserva lo de ficheros que ya no se pudieron localizar,
+        #    por si es algo temporal (otra rama, una raiz desconectada...).
+        origenes = leer_registro_origenes(carpeta)
+        for fila in self.filas:
+            if fila["origen"]:
+                origenes[fila["nombre"]] = fila["origen"]
+        error_registro = None
+        try:
+            escribir_registro_origenes(carpeta, origenes)
+        except OSError as error:
+            error_registro = str(error)
+
+        # 4. Recientes, copia e historial.
+        entrada = [{"ruta": carpeta, "extensiones": [], "filtros": filtros_vacios()}]
+        cfg.anadir_reciente(entrada, tipo="actualizacion")
+        if guardado:
+            cfg.asignar_guardado(entrada, guardado, tipo="actualizacion")
+        cfg.anadir_historial_actualizacion(carpeta, actualizados)
+        cfg.guardar()
+        self.app._refrescar_recientes()
+        self._pintar_tabla()
+
+        resumen = "Se han actualizado %d ficheros en:\n%s" % (actualizados, carpeta)
+        if guardado:
+            resumen += "\n\nVersiones anteriores guardadas en:\n%s" % guardado["carpeta"]
+        elif marcadas and cfg.max_guardados == 0:
+            resumen += ("\n\nNo se han guardado las versiones anteriores: "
+                        "'Guardar ficheros de' esta a 0.")
+        if fallidos:
+            resumen += "\n\nNo se han podido actualizar:\n" + "\n".join(fallidos[:10])
+        if error_registro:
+            resumen += "\n\nNo se ha podido guardar el registro de origenes:\n" \
+                + error_registro
+        if fallidos or error_registro:
+            messagebox.showwarning(TITULO, resumen, parent=self)
+        else:
+            messagebox.showinfo(TITULO, resumen, parent=self)
+
+    def _guardar_versiones(self, carpeta, filas):
+        """Copia al almacen las versiones que se van a sobrescribir."""
+        ahora = datetime.now()
+        nombre = "%s_Actualizacion_%s" % (ahora.strftime("%Y-%m-%d_%H-%M-%S"),
+                                          nombre_carpeta(carpeta))
+        almacen = self.config_app.almacen()
+        destino = os.path.join(almacen, nombre)
+        sufijo = 2
+        while os.path.exists(destino):
+            destino = os.path.join(almacen, "%s_%d" % (nombre, sufijo))
+            sufijo += 1
+        contenido = []
+        try:
+            os.makedirs(destino)
+            for fila in filas:
+                shutil.copy2(fila["local"], os.path.join(destino, fila["nombre"]))
+                try:
+                    octetos = os.path.getsize(fila["local"])
+                except OSError:
+                    octetos = 0
+                contenido.append({"nombre": fila["nombre"], "origen": fila["origen"],
+                                  "bytes": octetos})
+            with open(os.path.join(destino, MARCADOR_GUARDADO), "w", encoding="utf-8") as f:
+                json.dump({
+                    "programa": FIRMA_PROGRAMA,
+                    "version": 1,
+                    "tipo": "actualizacion",
+                    "fecha": ahora.strftime("%d/%m/%Y %H:%M:%S"),
+                    "carpeta_actualizada": carpeta,
+                    "rutas": [{"ruta": carpeta, "extensiones": [],
+                               "filtros": filtros_vacios()}],
+                    "ficheros": contenido,
+                }, f, indent=2, ensure_ascii=False)
+        except OSError as error:
+            if os.path.isdir(destino):
+                shutil.rmtree(destino, ignore_errors=True)
+            return None, str(error)
+        return {"carpeta": destino, "fecha": ahora.strftime("%d/%m/%Y %H:%M"),
+                "total": len(contenido)}, None
+
+    def _cerrar(self):
+        self._guardar_config()
+        self.destroy()
 
 
 class VentanaHistorial(tk.Toplevel):
@@ -1598,6 +2476,8 @@ class Aplicacion(tk.Tk):
         for hijo in self.winfo_children():
             if isinstance(hijo, tk.Toplevel) and not hijo.overrideredirect():
                 hijo.configure(bg=P["fondo"])
+                if hasattr(hijo, "repintar_tema"):
+                    hijo.repintar_tema()
                 pintar_barra_titulo(hijo, nombre == "oscuro")
 
     def _opciones_tk_clasico(self):
@@ -1701,14 +2581,16 @@ class Aplicacion(tk.Tk):
         e.configure("Barra.TButton", padding=(9, 3), width=0)
 
         e.configure("Principal.TButton", font=(FUENTE, 11, "bold"), padding=(10, 8),
-                    background=P["acento"], foreground=P["acento_texto"],
-                    bordercolor=P["acento"], lightcolor=P["acento"],
-                    darkcolor=P["acento"], focuscolor=P["acento"])
+                    background=P["principal"], foreground=P["principal_texto"],
+                    bordercolor=P["principal"], lightcolor=P["principal"],
+                    darkcolor=P["principal"], focuscolor=P["principal"])
         e.map("Principal.TButton",
-              background=[("disabled", P["campo_off"]), ("pressed", P["acento"]),
-                          ("active", P["acento_activo"])],
-              lightcolor=[("active", P["acento_activo"])],
-              darkcolor=[("active", P["acento_activo"])],
+              background=[("disabled", P["campo_off"]), ("pressed", P["principal_pulsado"]),
+                          ("active", P["principal_activo"])],
+              lightcolor=[("pressed", P["principal_pulsado"]),
+                          ("active", P["principal_activo"])],
+              darkcolor=[("pressed", P["principal_pulsado"]),
+                         ("active", P["principal_activo"])],
               foreground=[("disabled", P["desactivado"])])
 
         # -- campos de texto ---------------------------------------------------
@@ -1823,8 +2705,13 @@ class Aplicacion(tk.Tk):
         cabecera.grid(row=0, column=0, sticky="ew")
         cabecera.columnconfigure(0, weight=1)
 
-        ttk.Label(cabecera, text=TITULO,
-                  style="Titulo.TLabel").grid(row=0, column=0, sticky="w")
+        titulo = ttk.Frame(cabecera)
+        titulo.grid(row=0, column=0, sticky="w")
+        ttk.Label(titulo, text=TITULO, style="Titulo.TLabel").pack(side="left")
+        # La version a la vista: es lo primero que hay que saber cuando algo
+        # falla o cuando se comparan notas de version.
+        ttk.Label(titulo, text="v" + VERSION, style="Contador.TLabel").pack(
+            side="left", padx=(8, 0), pady=(6, 0))
 
         ttk.Label(cabecera, text="Tema", style="Suave.TLabel").grid(
             row=0, column=1, padx=(0, 6))
@@ -1834,8 +2721,11 @@ class Aplicacion(tk.Tk):
         self.combo_tema.grid(row=0, column=2, padx=(0, 14))
         self.combo_tema.bind("<<ComboboxSelected>>", self._cambiar_tema)
 
+        ttk.Button(cabecera, text="Actualizar carpeta...",
+                   command=lambda: self._abrir_actualizar()).grid(
+                       row=0, column=3, sticky="e", padx=(0, 6))
         ttk.Button(cabecera, text="Historial",
-                   command=self._abrir_historial).grid(row=0, column=3, sticky="e")
+                   command=self._abrir_historial).grid(row=0, column=4, sticky="e")
 
         ttk.Separator(padre).grid(row=1, column=0, sticky="ew", pady=(10, 12))
 
@@ -2480,6 +3370,9 @@ class Aplicacion(tk.Tk):
         self._ajustar_altura()
 
     def _tarjeta_reciente(self, grupo):
+        if grupo.get("tipo") == "actualizacion":
+            self._tarjeta_actualizacion(grupo)
+            return
         rutas = grupo["rutas"]
         marcado = self.config_app.es_favorito_exacto(rutas)
 
@@ -2520,6 +3413,40 @@ class Aplicacion(tk.Tk):
         etiqueta.grid(row=1, column=1, columnspan=2, sticky="w", padx=(2, 0), pady=(4, 0))
 
         ayuda = AyudaEmergente(self, tarjeta, detalle_grupo(rutas))
+        ayuda.vincular(tarjeta, etiqueta)
+
+    def _tarjeta_actualizacion(self, grupo):
+        """Fila de Recientes de una actualizacion. No lleva estrella: los
+        favoritos son grupos de extraccion. Pulsarla reabre la actualizacion
+        de esa carpeta."""
+        carpeta = grupo["rutas"][0]["ruta"]
+        guardado = grupo.get("guardado")
+
+        tarjeta = ttk.Frame(self.panel_recientes.interior, style="Tarjeta.TFrame",
+                            padding=(6, 5, 8, 5))
+        tarjeta.pack(fill="x", pady=PAD_FILA, padx=(0, 2))
+        tarjeta.columnconfigure(1, weight=1)
+
+        ttk.Label(tarjeta, text="\u21bb", style="TarjetaFiltro.TLabel",
+                  font=(FUENTE, 13), width=2, anchor="center").grid(
+                      row=0, column=0, rowspan=2, sticky="n", padx=(2, 6))
+        ttk.Button(tarjeta, text="Actualizacion de " + nombre_carpeta(carpeta),
+                   style="Ruta.TButton",
+                   command=lambda c=carpeta: self._abrir_actualizar(c)).grid(
+                       row=0, column=1, sticky="ew")
+        if guardado:
+            ttk.Button(tarjeta, text="Versiones viejas (%d)" % guardado.get("total", 0),
+                       style="Pequeno.TButton",
+                       command=lambda g=grupo: self._ver_guardado(g)).grid(
+                           row=0, column=2, padx=(6, 0))
+
+        info = acortar(carpeta, 60)
+        if guardado and guardado.get("fecha"):
+            info += "   \u00b7   guardado " + guardado["fecha"]
+        etiqueta = ttk.Label(tarjeta, text=info, style="TarjetaSuave.TLabel")
+        etiqueta.grid(row=1, column=1, columnspan=2, sticky="w", padx=(2, 0), pady=(4, 0))
+
+        ayuda = AyudaEmergente(self, tarjeta, "Actualizacion de:\n" + carpeta)
         ayuda.vincular(tarjeta, etiqueta)
 
     def _alternar_estrella_reciente(self, grupo):
@@ -2641,6 +3568,24 @@ class Aplicacion(tk.Tk):
 
     def _abrir_historial(self):
         VentanaHistorial(self, self.config_app)
+
+    def _abrir_actualizar(self, carpeta=None):
+        """Una sola ventana de actualizar: si ya esta abierta, se trae delante.
+        Desde un reciente llega con su carpeta y analiza directamente."""
+        ventana = getattr(self, "ventana_actualizar", None)
+        try:
+            abierta = ventana is not None and ventana.winfo_exists()
+        except tk.TclError:
+            abierta = False
+        if abierta:
+            if carpeta:
+                ventana._poner_carpeta(carpeta)
+                ventana._analizar()
+            ventana.deiconify()
+            ventana.lift()
+            ventana.focus_force()
+            return
+        self.ventana_actualizar = VentanaActualizar(self, carpeta, analizar=bool(carpeta))
 
     # -- extraccion ---------------------------------------------------------
 

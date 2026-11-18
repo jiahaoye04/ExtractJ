@@ -1,93 +1,152 @@
-# Extraer Ficheros
+# ExtractJ
 
-Recorre una o varias carpetas con todas sus subcarpetas y copia en un único
-sitio los ficheros que te interesen. Puedes elegir los tipos de fichero de cada
-carpeta, filtrar por nombre y tamaño, o sacar solo una muestra al azar.
+![Versión](https://img.shields.io/badge/versi%C3%B3n-2.1.0-2f7fd1)
+![Python](https://img.shields.io/badge/python-3.8%2B-3776ab)
+![Plataforma](https://img.shields.io/badge/plataforma-Windows%2010%20%7C%2011-555555)
+![Dependencias](https://img.shields.io/badge/dependencias-ninguna-2e8b57)
 
-Sirve para juntar de golpe todos los `.java` de un proyecto, todos los `.jsp`
-y `.css` que contengan la palabra `cocina` repartidos por tres carpetas, o
-veinte ficheros cualesquiera de un directorio enorme para echarles un vistazo.
+**Reúne en una sola carpeta los ficheros que necesitas de cualquier proyecto,
+y mantenlos al día.**
+
+ExtractJ (en la ventana, *Extraer Ficheros*) recorre una o varias carpetas con
+todas sus subcarpetas y copia en un único sitio los ficheros que te
+interesan. Puedes elegir los tipos de cada carpeta, filtrar por nombre y por
+tamaño, o sacar solo una muestra al azar. Y si guardas copias de ficheros para
+consultarlos, ExtractJ las pone al día cuando cambian los originales.
+
+- Junta de golpe todos los `.java` de un proyecto.
+- Saca los `.jsp` y `.css` que contengan `cocina` de tres carpetas distintas.
+- Coge veinte ficheros al azar de un directorio enorme para echarles un
+  vistazo.
+- Pon al día tu carpeta de clases de referencia después de un merge.
+
+> ### 🆕 Novedades de la 2.1 · «Siempre al día»
+>
+> **Actualizar carpeta**: ExtractJ encuentra el original de cada fichero de
+> tu carpeta (los `.java` por su `package`) y sustituye los que han cambiado,
+> con vista previa y copia de las versiones anteriores.
+>
+> [Leer las notas de la versión →](docs/notas-de-version/2.1.0.md)
+
+---
+
+## Índice
+
+- [Requisitos](#requisitos)
+- [Instalación](#instalación)
+- [Primeros pasos](#primeros-pasos)
+- [La ventana](#la-ventana)
+- [Extensiones](#extensiones)
+- [Filtros](#filtros)
+- [Favoritos](#favoritos)
+- [Recientes y copias guardadas](#recientes-y-copias-guardadas)
+- [Actualizar carpeta](#actualizar-carpeta)
+- [Historial](#historial)
+- [Tema claro y oscuro](#tema-claro-y-oscuro)
+- [Preguntas frecuentes](#preguntas-frecuentes)
+- [Tus datos](#tus-datos)
+- [Versiones](#versiones)
+
+---
+
+## Requisitos
+
+- **Windows 10 u 11.**
+- **Python 3.8 o superior**, con `tkinter`, que viene incluido en el
+  instalador oficial de [python.org](https://www.python.org/downloads/).
+
+Nada más: ExtractJ solo usa la biblioteca estándar de Python.
 
 ---
 
 ## Instalación
 
-Necesitas Python 3 instalado en Windows. No hace falta nada más: el programa
-solo usa la biblioteca estándar.
+1. Descarga el repositorio: botón **Code → Download ZIP**, o
+   `git clone https://github.com/jiahaoye04/ExtractJ.git`.
+2. Deja juntos en la misma carpeta:
+   - `ExtraerFicheros.py`
+   - `ExtraerFicheros.bat`
+3. Haz doble clic en `ExtraerFicheros.bat`.
 
-Deja los dos ficheros en la misma carpeta:
+La primera vez se crea `config.json` junto al programa, con tus preferencias.
 
-- `ExtraerFicheros.py`
-- `ExtraerFicheros.bat`
+**Si al abrirlo no pasa nada**, edita el `.bat` con el Bloc de notas y pon en
+la línea `set "PYTHONW=..."` la ruta completa a tu `pythonw.exe`.
 
-Y haz doble clic en el `.bat`. Al arrancar por primera vez se crea un tercer
-fichero, `config.json`, donde se guardan tus preferencias.
+### Actualizar a una versión nueva
 
-Si al abrirlo no pasa nada, edita el `.bat` con el Bloc de notas y pon en la
-línea `set "PYTHONW=..."` la ruta completa a tu `pythonw.exe`.
+Sustituye `ExtraerFicheros.py` por el nuevo. Tu `config.json` se conserva, y
+si viene de una versión antigua se convierte solo al arrancar. En la cabecera
+verás el número de la versión instalada.
+
+---
+
+## Primeros pasos
+
+Tu primera extracción, en cuatro pasos:
+
+1. En **Carpetas de origen**, elige una carpeta con el botón `...`.
+2. En el campo de al lado, escribe las extensiones: `.java`. Vacío extrae
+   todos los tipos.
+3. Revisa el **Destino**. Debajo verás la carpeta que se va a crear, por
+   ejemplo `CopiaJAVA`.
+4. Pulsa **Extraer ficheros**.
+
+Al terminar se abre la carpeta con todo lo copiado (opción *Abrir la carpeta al
+terminar*, activada de fábrica).
 
 ---
 
 ## La ventana
 
-- **Arriba**: la extensión global, el filtro global de nombre, el selector de
-  tema y el botón *Historial*.
-- **Columna izquierda**: las carpetas de origen y, debajo, las extracciones
-  recientes.
-- **Columna derecha**: los favoritos.
-- **Abajo**: la carpeta de destino, el progreso y el botón **Extraer ficheros**,
-  que siempre queda a la vista.
+- **Cabecera:** versión instalada, tema, **Actualizar carpeta…** e
+  **Historial**. Debajo, la extensión global y el filtro global de nombre.
+- **Columna izquierda:** las carpetas de origen y, debajo, *Recientes*.
+- **Columna derecha:** los favoritos.
+- **Abajo:** el destino, el progreso y el botón **Extraer ficheros**, que
+  siempre queda a la vista.
 
-La ventana crece sola hasta ocupar como mucho el 80 % del alto de tu pantalla.
-A partir de ahí, cada sección saca su propia barra de desplazamiento, y la
-rueda del ratón mueve la sección que tengas debajo del puntero.
+La ventana crece sola hasta ocupar como mucho el 80 % del alto de la
+pantalla. A partir de ahí, cada sección tiene su propia barra de
+desplazamiento, y la rueda del ratón mueve la que tengas debajo.
 
----
+### Carpetas de origen
 
-## Cómo se usa
+- Cada línea es una carpeta con sus extensiones.
+- **+ Añadir carpeta** añade una línea; la `×` quita una y **Limpiar** las
+  vacía todas.
+- Las rutas largas se ven por el final, que es donde está el nombre de la
+  carpeta.
 
-1. **Carpetas de origen**: escribe o elige una carpeta en la primera línea
-   (botón `...`), y en el campo de al lado sus extensiones, separadas por
-   espacios: `.java .jsp .css`. Con *+ Añadir carpeta* metes tantas como
-   quieras, cada una con las suyas. La `×` quita una línea y *Limpiar* las
-   vacía todas.
-2. **Opcional**: filtros (ver más abajo).
-3. **Destino**: por defecto, la carpeta del propio programa.
-4. Pulsa **Extraer ficheros**.
+### Carpeta de destino
 
-Debajo del destino verás la carpeta que se va a crear:
+| Lo que extraes                                   | Carpeta que se crea |
+|--------------------------------------------------|---------------------|
+| Una sola extensión en todas las líneas           | `CopiaJAVA`         |
+| Varias extensiones                               | `CopiaMIXTO`        |
+| Todas las líneas sin extensión (todos los tipos) | `CopiaTODO`         |
+| Mezcla de líneas con y sin extensión             | `CopiaMIXTO`        |
 
-| Lo que extraes                                   | Carpeta      |
-|--------------------------------------------------|--------------|
-| Una sola extensión en todas las líneas           | `CopiaJAVA`  |
-| Varias extensiones                               | `CopiaMIXTO` |
-| Todas las líneas sin extensión (todos los tipos) | `CopiaTODO`  |
-| Mezcla de líneas con y sin extensión             | `CopiaMIXTO` |
-
-Los filtros no influyen en el nombre.
-
-Al terminar, si tienes marcada **Abrir la carpeta al terminar**, se abre el
-destino en el explorador en cuanto cierras el aviso de resumen.
+Con **Abrir la carpeta al terminar** marcada, se abre en el explorador en
+cuanto cierras el aviso de resumen.
 
 ---
 
 ## Extensiones
 
-- **Una línea con el campo vacío extrae todos los tipos de fichero**, incluidos
-  los que no tienen extensión (`Makefile`, `LICENSE`). La tarjeta lo indica con
-  *Todos los tipos*.
-- **Extensión global**: lo que escribas arriba **se escribe en todas las
-  líneas** en cuanto lo modificas (medio segundo después de dejar de teclear).
-  Si la cambias, cada línea pierde la extensión global anterior, recibe la
-  nueva y conserva lo suyo. Con la global en `.java` y una línea en
+- Se escriben separadas por espacios: `.java .jsp .css`.
+- **Una línea vacía extrae todos los tipos**, incluidos los ficheros sin
+  extensión (`Makefile`, `LICENSE`).
+- **Extensión global:** lo que escribas arriba se escribe en todas las líneas
+  al modificarlo. Al cambiarla, cada línea pierde la extensión global anterior,
+  recibe la nueva y conserva lo suyo. Con la global en `.java` y una línea en
   `.jsp .java`, cambiar la global a `.css` deja esa línea en `.jsp .css`.
-- La global **solo actúa cuando la modificas**. Al cargar un favorito o un
-  reciente, añadir una línea o abrir el programa, no se aplica. Para repartirla
-  de nuevo basta con escribir una letra y borrarla.
+- La global **solo se aplica cuando la modificas**. Al cargar un favorito,
+  añadir una línea o abrir el programa, no se aplica. Para repartirla otra vez,
+  escribe una letra y bórrala.
 - Cambiar una línea a mano nunca cambia la global.
-- Las extensiones tienen que ser conocidas. Si escribes algo como `.asdhaisud`,
-  la extracción **no empieza**: te dice en qué línea está el fallo y qué texto
-  exactamente, y no se copia nada.
+- Si escribes una extensión desconocida, la extracción no empieza y se te
+  indica en qué línea está el fallo.
 
 ---
 
@@ -97,146 +156,212 @@ destino en el explorador en cuanto cierras el aviso de resumen.
 
 Arriba, para todas las líneas a la vez:
 
-- **Inclusión**, con su modo: *Contiene*, *Empieza por* o *Termina por*.
-- **Excluir**: descarta todo lo que contenga esa palabra.
+- **Inclusión** con su modo: *Contiene*, *Empieza por* o *Termina por*.
+- **Excluir:** descarta lo que contenga esa palabra.
 
-Se compara siempre con el **nombre sin la extensión**, sin distinguir
-mayúsculas. Por eso `holacocina.java` sí pasa *Termina por* `cocina`.
+Se compara con el **nombre sin la extensión** y sin distinguir mayúsculas:
+`holacocina.java` sí pasa *Termina por* `cocina`.
 
 ### Filtros de cada carpeta
 
-El botón **Filtros…** de cada línea abre una ventanita con:
+El botón **Filtros…** de cada línea permite:
 
-- **Tamaño mínimo y máximo**, en KB. Los dos son opcionales y admiten
-  decimales (`1,5`).
-- **El nombre contiene**: como el filtro global, pero solo para esa carpeta.
-- **Muestra aleatoria**: en vez de todo, saca un **número fijo** de ficheros al
-  azar o un **porcentaje**. Se aplica la última, sobre lo que haya quedado tras
-  los demás filtros. Si pides un porcentaje pequeño de pocos ficheros, sale al
-  menos uno.
+- **Tamaño mínimo y máximo**, en KB, con decimales (`1,5`).
+- **El nombre contiene**, solo para esa carpeta.
+- **Muestra aleatoria:** un número fijo de ficheros o un porcentaje, elegidos
+  al azar entre los que pasan los demás filtros.
 
-Debajo de cada ruta se ve un resumen en azul, por ejemplo
-`Filtros: <= 40 KB · 15 al azar`. El aviso final te dice cuántos ficheros
-salieron de cuántos en cada carpeta con muestra aleatoria.
+El resumen aparece en azul bajo la ruta, por ejemplo
+`Filtros: <= 40 KB · 15 al azar`.
 
-Si pones **la misma carpeta en dos líneas con filtros distintos**, se hacen dos
-pasadas y los ficheros repetidos se descartan. Así puedes sacar, por ejemplo,
-10 al azar y además todos los de menos de 3 KB.
+Si pones **la misma carpeta en dos líneas con filtros distintos**, se hacen
+dos pasadas y no se repiten ficheros. Así puedes sacar, por ejemplo, 10 al
+azar y además todos los de menos de 3 KB.
 
 ---
 
 ## Favoritos
 
-Un favorito es un **grupo entero**: un nombre que le pones tú y la lista
-completa de carpetas, cada una con sus extensiones y sus filtros. Al pulsarlo
-se cargan todas de golpe.
+Un favorito es un **grupo entero**: un nombre y todas sus carpetas, con sus
+extensiones y filtros. Al pulsarlo se cargan de golpe.
 
-- **☆ Guardar favorito** guarda las líneas que tengas escritas. Se convierte en
-  **★ En favoritos** cuando lo que hay en pantalla coincide exactamente con uno
-  guardado, y pulsándolo entonces lo quita.
-- La estrella **solo brilla si coinciden las carpetas, las extensiones y los
-  filtros**. Cambiar cualquiera de las tres la apaga.
-- **Guardar un grupo con las mismas carpetas que un favorito lo sobrescribe**:
-  se queda con las extensiones y filtros actuales y te ofrece el nombre
-  anterior. Una carpeta de más o de menos ya es un favorito nuevo.
-- **Buscar** filtra los favoritos por nombre mientras escribes.
-- **Sustituir al cargar**: apagado (de fábrica), pulsar un favorito **añade**
-  sus carpetas a las que ya tienes, para combinar varios favoritos en una
-  extracción. Encendido, borra lo que haya antes de cargar. Se recuerda.
-- Si dejas el ratón quieto sobre un favorito, aparece un recuadro con todas sus
-  carpetas, extensiones y filtros.
-- No hay límite de favoritos.
+- **☆ Guardar favorito** guarda las líneas actuales. Se convierte en
+  **★ En favoritos** cuando lo que ves coincide exactamente con uno guardado;
+  pulsándolo entonces, lo quitas.
+- La estrella solo brilla si coinciden **carpetas, extensiones y filtros**.
+- **Guardar las mismas carpetas otra vez sobrescribe** ese favorito, y se te
+  ofrece el nombre anterior. Con una carpeta de más o de menos, es un
+  favorito nuevo.
+- **Buscar** filtra los favoritos por nombre.
+- **Sustituir al cargar:** apagado, pulsar un favorito **añade** sus carpetas
+  a las que ya tienes, para combinar varios. Encendido, sustituye lo que haya.
+- Si dejas el ratón quieto sobre un favorito, ves todas sus carpetas.
 
 ---
 
-## Recientes y ficheros guardados
+## Recientes y copias guardadas
 
-Cada extracción aparece en *Recientes*. Hay **una fila por conjunto de
-carpetas**: repetir una extracción sube su fila arriba con lo último que
-usaste, sin crear otra. Pulsar una fila carga sus carpetas, y su estrella la
-guarda como favorito.
+*Recientes* muestra tus últimas operaciones:
 
-### Ficheros de las últimas extracciones
+- **Extracciones**, con estrella para guardarlas como favorito. Pulsarlas
+  carga sus carpetas.
+- **↻ Actualizaciones**, que vuelven a abrir *Actualizar carpeta* con esa
+  carpeta.
 
-Además de la lista, ExtractJ puede **conservar una copia de los ficheros** de
-las últimas extracciones. La carpeta de destino (`CopiaJAVA`…) se sigue
-vaciando en cada extracción; las copias van aparte.
+Hay una fila por conjunto de carpetas: repetir una operación sube su fila
+arriba, sin duplicarla.
 
-- **Recordar** (1–10): cuántas filas de recientes se guardan.
-- **Guardar ficheros de** (0–10): de cuántas de esas extracciones se conserva
-  la copia. Nunca puede pasar de *Recordar*. A 0 no se guarda nada.
-- **Copias en: … / Cambiar…**: dónde se guardan. Por defecto, una carpeta
-  `Extracciones guardadas` junto al programa.
+### Copias guardadas
 
-Ejemplo, guardando 3: si extraes en este orden path3, path1, path2, path1,
-path1 y path2, quedan guardados los ficheros de la última extracción de path2,
-la última de path1 y la de path3.
+ExtractJ puede **conservar una copia de los ficheros** de tus últimas
+operaciones:
 
-Los recientes con copia llevan el botón **Ver ficheros (N)**. Abre una ventana
-con la lista de ficheros, la carpeta de la que salió cada uno y su tamaño, y un
-botón para abrir la copia en el explorador.
+| Ajuste                          | Qué hace                                                                                       |
+|---------------------------------|------------------------------------------------------------------------------------------------|
+| **Recordar** (1–10)             | Cuántas filas tiene *Recientes*                                                                |
+| **Guardar ficheros de** (0–10)  | De cuántas se guarda copia. Nunca más que *Recordar*; a 0 no se guarda nada                    |
+| **Copias en… / Cambiar…**       | Dónde se guardan. Por defecto, `Extracciones guardadas` junto al programa                      |
 
-**Las copias que sobran se borran solas**: al repetir las mismas carpetas, al
-quedar fuera del límite por una extracción nueva y al bajar cualquiera de los
-dos contadores. Por seguridad, ExtractJ solo borra carpetas que lleven dentro
-su fichero `_contenido_extractj.json`. Nunca toca una carpeta que no haya
-creado él.
+- En una **extracción** se guardan los ficheros copiados. Botón
+  **Ver ficheros (N)**.
+- En una **actualización** se guardan las versiones que se sustituyeron.
+  Botón **Versiones viejas (N)**.
 
-Cada copia ocupa lo mismo que la extracción. Con código son unos pocos megas;
-con imágenes o vídeo, vigila el contador.
+Las copias que sobran **se borran solas**. Por seguridad, ExtractJ solo borra
+carpetas que llevan dentro su fichero `_contenido_extractj.json`: nunca toca
+una carpeta que no haya creado él.
+
+---
+
+## Actualizar carpeta
+
+*Nuevo en la 2.1.* Para cuando guardas copias de ficheros del proyecto y se
+quedan desfasadas.
+
+1. Pulsa **Actualizar carpeta…** en la cabecera.
+2. En **Rutas de búsqueda**, añade dónde están los originales. Para un
+   proyecto Java, la carpeta `src`; para JSP, CSS o JS, también la carpeta
+   web.
+3. En **Carpeta a actualizar**, elige tu carpeta con *Examinar…*. Por defecto
+   propone `ConstanteJAVA` dentro del destino.
+4. Pulsa **Analizar**, revisa la vista previa y pulsa
+   **Actualizar marcados**.
+
+### Cómo encuentra los originales
+
+1. **Registro de la carpeta:** si ya se actualizó antes, va directo.
+2. **`.java`, por su `package`:** `package com.ejemplo.app;` en `Clase.java`
+   → `src\com\ejemplo\app\Clase.java`. Es exacto aunque haya clases con el
+   mismo nombre en otros paquetes.
+3. **Por nombre**, para todo lo demás y para los Java que se hayan cambiado
+   de paquete. Se saltan `build`, `bin`, `target`, `.git` y similares.
+
+### Vista previa
+
+| Estado                | Qué significa                         | Qué puedes hacer                     |
+|-----------------------|---------------------------------------|--------------------------------------|
+| **Cambiado**          | El original es distinto de tu copia   | Viene marcado; clic en la casilla para desmarcarlo |
+| **Igual**             | Ya está al día                        | Nada                                 |
+| **Varios candidatos** | Hay varios ficheros con ese nombre    | Doble clic y eliges el original      |
+| **No encontrado**     | No está en las rutas de búsqueda      | Doble clic y lo indicas a mano       |
+
+Se compara **el contenido**, no la fecha. Nada se modifica hasta que pulsas
+*Actualizar marcados*, y los ficheros no encontrados no se tocan nunca.
+
+Al actualizar, la carpeta guarda en `_origenes_extractj.json` el original de
+cada fichero, también los que elegiste a mano: la siguiente vez se resuelve
+todo al instante.
+
+Solo se revisan los ficheros que están directamente en la carpeta, no los de
+sus subcarpetas.
 
 ---
 
 ## Historial
 
-El botón *Historial*, arriba a la derecha, abre una ventana con todas las
-extracciones que has hecho: fecha, hora, tipos, cuántos ficheros se copiaron,
-de dónde y a dónde. Si tenía varias carpetas, la columna *Origen* muestra la
-primera y `(+N)`. Se guardan las 200 últimas y hay un botón para vaciarlo.
+El botón **Historial** lista todas tus extracciones y actualizaciones:
+fecha, hora, tipo, número de ficheros, origen y destino. Se guardan las 200
+últimas.
 
 ---
 
-## Tema
+## Tema claro y oscuro
 
 El selector **Tema** de la cabecera tiene tres opciones:
 
-- **Sistema** (de fábrica): sigue el modo claro u oscuro de Windows, y si lo
-  cambias con el programa abierto te sigue en unos segundos.
-- **Claro** y **Oscuro**: fuerzan uno, sin mirar a Windows.
+- **Sistema** (de fábrica): sigue a Windows, también si lo cambias con el
+  programa abierto.
+- **Claro** y **Oscuro**: fuerzan uno.
 
-El cambio se aplica al momento en todas las ventanas del programa, incluida la
-barra de título en Windows 10 y 11. Los avisos de Windows y el selector de
-carpetas son del sistema y siguen el tema de Windows, no el del programa.
-
----
-
-## Cosas que conviene saber
-
-- **La carpeta de destino se borra entera antes de cada extracción.** Si ya
-  existía, el programa te avisa y te pide confirmación. No guardes nada tuyo
-  dentro de una carpeta `Copia...`.
-- Los ficheros se copian **planos**, sin respetar la estructura de carpetas del
-  origen. Si dos acaban con el mismo nombre, el segundo se guarda como
-  `Nombre_1.java`, el tercero como `Nombre_2.java`, y así.
-- Los ficheros originales **no se tocan**: es una copia, no un movimiento.
-- Si no se encuentra ningún fichero, te avisa, y si tenías filtros te sugiere
-  que quizá alguno sea demasiado estricto.
-- El destino y la carpeta de copias guardadas no pueden estar dentro de
-  ninguna de las carpetas de origen.
-- Las rutas largas se ven por el final, que es donde está el nombre de la
-  carpeta que importa.
+El cambio es inmediato en todas las ventanas, incluida la barra de título en
+Windows 10 y 11. Los avisos y el selector de carpetas son del sistema y siguen
+el tema de Windows.
 
 ---
 
-## Qué se recuerda entre sesiones
+## Preguntas frecuentes
 
-En `config.json`: la extensión global, el destino, si abrir el destino al
-terminar, el modo de carga de favoritos, el modo del filtro global, el tema,
-los dos contadores de recientes, la carpeta de copias guardadas, los favoritos,
-los recientes y el historial. Si borras ese fichero, el programa vuelve a su
-estado de fábrica, pero las copias guardadas siguen en su carpeta hasta que
-las borres tú.
+**¿ExtractJ modifica mis ficheros originales?**
+No. Extraer es copiar, nunca mover. *Actualizar carpeta* solo escribe en la
+carpeta que tú eliges, nunca en las rutas de búsqueda.
 
-El fichero está en **formato 3**. Si vienes de una versión anterior, se
-convierte solo al arrancar la primera vez y no pierdes favoritos, recientes
-ni historial.
+**¿Qué pasa con la carpeta `CopiaJAVA` si ya existía?**
+Se vacía antes de cada extracción, y antes se te pide confirmación. No guardes
+nada tuyo dentro de una carpeta `Copia...`.
+
+**¿Y si dos ficheros se llaman igual?**
+La copia es plana, sin subcarpetas: el segundo se guarda como
+`Nombre_1.java`, el tercero como `Nombre_2.java`, etc.
+
+**Mi extensión no es válida.**
+ExtractJ acepta una lista amplia de tipos conocidos (código, documentos,
+imágenes, audio, vídeo, comprimidos…). Si echas en falta alguno, abre una
+*issue*.
+
+**No encuentra ningún fichero.**
+Revisa los filtros: el aviso te sugiere si alguno puede ser demasiado
+estricto.
+
+**Actualizar carpeta dice que no hay rutas de búsqueda.**
+Añade al menos una con *+ Añadir ruta*. Para Java, la carpeta `src` del
+proyecto.
+
+**¿Funciona fuera de Windows?**
+Está pensado para Windows. Al ser Python con `tkinter` puede arrancar en otros
+sistemas, pero no se prueba en ellos, y el tema del sistema y la barra de
+título oscura solo funcionan en Windows.
+
+---
+
+## Tus datos
+
+Todo se queda en tu equipo. ExtractJ no se conecta a internet.
+
+| Fichero                       | Dónde                         | Qué guarda                                                                                         |
+|-------------------------------|-------------------------------|----------------------------------------------------------------------------------------------------|
+| `config.json`                 | Junto al programa             | Preferencias, favoritos, recientes, historial y rutas de búsqueda                                  |
+| `Extracciones guardadas/`     | Junto al programa, o donde elijas | Copias de tus últimas operaciones                                                             |
+| `_contenido_extractj.json`    | Dentro de cada copia guardada | Lista de ficheros y su origen; autoriza el borrado automático                                      |
+| `_origenes_extractj.json`     | En cada carpeta actualizada   | El original de cada fichero                                                                        |
+
+Si borras `config.json`, ExtractJ vuelve a su estado de fábrica; las copias
+guardadas siguen en su carpeta hasta que las borres tú. Ninguno de estos
+ficheros se sube al repositorio: están en el `.gitignore`.
+
+---
+
+## Versiones
+
+| Versión | Fecha       | Lo principal                                                      |
+|---------|-------------|-------------------------------------------------------------------|
+| **2.1.0** | 2026-11-18 | Actualizar carpeta · [notas](docs/notas-de-version/2.1.0.md)     |
+| 2.0.1   | 2026-11-05  | Correcciones del repositorio y del README                         |
+| 2.0.0   | 2026-10-29  | Filtros por carpeta, copias guardadas, modo oscuro, dos columnas  |
+| 1.3.0   | 2026-09-18  | Varias carpetas a la vez, filtro de nombre, favoritos de grupo    |
+| 1.2.0   | 2026-09-02  | Ventana ajustable, favoritos ilimitados, abrir al terminar        |
+| 1.1.0   | 2026-07-21  | Favoritos con nombre y extensión                                  |
+| 1.0.0   | 2026-07-20  | Primera versión en Python                                         |
+
+- [Registro de cambios completo](CHANGELOG.md)
+- [Notas de versión](docs/notas-de-version/)
+- [Notas técnicas de desarrollo](docs/NOTAS_TECNICAS.md)
