@@ -664,3 +664,47 @@ tema en caliente con la ventana abierta; regresión completa de la 2.0.
 - Solo ficheros directamente en la carpeta, no subcarpetas.
 - Sin vista de diferencias antes de actualizar.
 - Sigue sin cancelar durante la copia de una extracción.
+
+---
+
+## 2.1.1 · 2026-11-23 — Carga de grupos con carpetas repetidas
+
+### El fallo
+
+`_cargar_grupo()` buscaba la línea "gemela" (misma ruta normalizada) en
+`self.lineas`, que incluye las líneas que esa misma carga acababa de crear.
+Desde la 2.0 un grupo puede llevar la misma carpeta varias veces con filtros
+distintos (dos pasadas), así que la segunda entrada de esa carpeta encontraba
+como gemela la línea recién creada para la primera y la sobrescribía. Un
+favorito de 9 líneas con 3 de la misma carpeta se cargaba con 7, todas con los
+filtros de la última. Como lo cargado ya no coincidía con lo guardado,
+`es_favorito_exacto()` daba falso y la estrella no se encendía.
+
+El favorito estaba bien guardado: el fallo era solo de carga.
+
+### La corrección
+
+- La gemela se busca solo en `previas`, la lista de las líneas que había en
+  pantalla **antes** de cargar.
+- Cada línea previa se empareja **una sola vez**: al usarla se quita de
+  `previas`. Si en pantalla hay una `X` y el grupo trae tres `X`, la primera
+  actualiza la existente y las otras dos se añaden.
+- Recargar el mismo grupo en modo añadir no duplica nada: cada entrada
+  encuentra su línea previa.
+
+`clave_rutas()` (identidad por conjunto de carpetas) no cambia: sigue
+decidiendo sobrescrituras de favoritos y filas de *Recientes*.
+
+### Probado (Xvfb, Python 3.12)
+
+Favorito de 9 líneas (una carpeta ×3 con filtros de texto, muestra y tamaño,
+más 6 carpetas sueltas). Antes / después:
+
+| Caso                                         | 2.1.0      | 2.1.1 |
+|----------------------------------------------|------------|-------|
+| Carga con las líneas vacías                  | 7          | 9     |
+| *Sustituir al cargar* encendido              | 7          | 9     |
+| Añadir sobre `X` + otra carpeta ajena        | 8          | 10    |
+| Recargar el mismo favorito en modo añadir    | sin cambio | sin cambio |
+| Pasadas de `X` al extraer                    | 1          | 3     |
+| Estrella encendida tras cargar               | no         | sí    |
