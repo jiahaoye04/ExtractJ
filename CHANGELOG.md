@@ -16,6 +16,19 @@ Las decisiones técnicas, en [`docs/NOTAS_TECNICAS.md`](docs/NOTAS_TECNICAS.md).
 
 ---
 
+## [2.1.1] — 2026-11-23
+
+[Notas de la versión completas →](docs/notas-de-version/2.1.1.md)
+
+### Corregido
+
+- Un favorito o reciente con **la misma carpeta en varias líneas** (por
+  ejemplo, con filtros distintos) se cargaba con líneas de menos: las
+  repetidas se pisaban entre sí y solo quedaba la última. Ahora se cargan
+  todas, y la estrella de *Guardar favorito* se enciende como debe.
+
+---
+
 ## [2.1.0] — 2026-11-18 · «Siempre al día»
 
 [Notas de la versión completas →](docs/notas-de-version/2.1.0.md)
@@ -152,6 +165,7 @@ Primera versión: reescritura completa en Python del antiguo script `.bat`.
 - Barra de progreso, con la copia en segundo plano.
 - Nombres repetidos resueltos como `Nombre_1`, `Nombre_2`…
 
+[2.1.1]: https://github.com/jiahaoye04/ExtractJ/releases/tag/v2.1.1
 [2.1.0]: https://github.com/jiahaoye04/ExtractJ/releases/tag/v2.1.0
 [2.0.1]: https://github.com/jiahaoye04/ExtractJ/commit/a8f8e76
 [2.0.0]: https://github.com/jiahaoye04/ExtractJ/commit/6cacbd6

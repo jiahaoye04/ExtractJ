@@ -1,6 +1,6 @@
 # ExtractJ
 
-![Versión](https://img.shields.io/badge/versi%C3%B3n-2.1.0-2f7fd1)
+![Versión](https://img.shields.io/badge/versi%C3%B3n-2.1.1-2f7fd1)
 ![Python](https://img.shields.io/badge/python-3.8%2B-3776ab)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows%2010%20%7C%2011-555555)
 ![Dependencias](https://img.shields.io/badge/dependencias-ninguna-2e8b57)
@@ -354,7 +354,8 @@ ficheros se sube al repositorio: están en el `.gitignore`.
 
 | Versión | Fecha       | Lo principal                                                      |
 |---------|-------------|-------------------------------------------------------------------|
-| **2.1.0** | 2026-11-18 | Actualizar carpeta · [notas](docs/notas-de-version/2.1.0.md)     |
+| **2.1.1** | 2026-11-23 | Favoritos con la misma carpeta repetida · [notas](docs/notas-de-version/2.1.1.md) |
+| 2.1.0   | 2026-11-18  | Actualizar carpeta · [notas](docs/notas-de-version/2.1.0.md)       |
 | 2.0.1   | 2026-11-05  | Correcciones del repositorio y del README                         |
 | 2.0.0   | 2026-10-29  | Filtros por carpeta, copias guardadas, modo oscuro, dos columnas  |
 | 1.3.0   | 2026-09-18  | Varias carpetas a la vez, filtro de nombre, favoritos de grupo    |

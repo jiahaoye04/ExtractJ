@@ -37,7 +37,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 # ---------------------------------------------------------------------------
 
 TITULO = "Extraer Ficheros"
-VERSION = "2.1.0"
+VERSION = "2.1.1"
 FICHERO_CONFIG = "config.json"
 VERSION_CONFIG = 3
 
@@ -3137,24 +3137,33 @@ class Aplicacion(tk.Tk):
         Con el interruptor en 'sustituir' se borra lo que haya. En modo anadir
         (el de fabrica) se agregan las rutas que falten; si una ruta ya esta en
         pantalla se le actualizan extensiones y filtros en vez de duplicarla.
+
+        Un grupo puede traer la MISMA carpeta varias veces con filtros
+        distintos (dos pasadas: 10 al azar y todo lo pequeno, por ejemplo).
+        Por eso la gemela solo se busca entre las lineas que ya estaban antes
+        de cargar, y cada una se usa una sola vez. Si se buscara tambien entre
+        las recien creadas, la segunda entrada de esa carpeta pisaria a la
+        primera y el grupo se cargaria con lineas de menos.
         """
         if self.var_sustituir.get() or self._lineas_vacias():
             for linea in list(self.lineas):
                 linea["marco"].destroy()
             self.lineas = []
 
+        previas = list(self.lineas)      # las que habia antes de cargar
         for entrada in grupo.get("rutas", []):
             ruta = entrada.get("ruta", "")
             exts = list(entrada.get("extensiones", []))
             filtros = normalizar_filtros(entrada.get("filtros"))
             gemela = next(
-                (l for l in self.lineas
+                (l for l in previas
                  if l["ruta"].get().strip()
                  and normalizar_ruta(l["ruta"].get().strip()) == normalizar_ruta(ruta)),
                 None)
             if gemela is None:
                 self._anadir_linea(ruta, exts, filtros)
             else:
+                previas.remove(gemela)   # ya emparejada: no vale para otra
                 gemela["extensiones"].set(formatear_extensiones(exts))
                 gemela["filtros"] = filtros
                 self._pintar_resumen_linea(gemela)
